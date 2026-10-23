@@ -48,18 +48,17 @@ class GStrorage {
   }
 
   static Future<void> close() async {
-    // user.compact();
-    // user.close();
-    userInfo.compact();
-    userInfo.close();
-    historyword.compact();
-    historyword.close();
-    localCache.compact();
-    localCache.close();
-    setting.compact();
-    setting.close();
-    video.compact();
-    video.close();
+    // Hive 2.x 的 compact/close 都返回 Future，不 await 会在落盘前返回
+    await userInfo.compact();
+    await userInfo.close();
+    await historyword.compact();
+    await historyword.close();
+    await localCache.compact();
+    await localCache.close();
+    await setting.compact();
+    await setting.close();
+    await video.compact();
+    await video.close();
   }
 }
 

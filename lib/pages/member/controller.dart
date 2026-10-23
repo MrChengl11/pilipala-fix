@@ -15,7 +15,7 @@ import 'package:share_plus/share_plus.dart';
 class MemberController extends GetxController {
   late int mid;
   Rx<MemberInfoModel> memberInfo = MemberInfoModel().obs;
-  late Map userStat;
+  Map userStat = {};
   RxString face = ''.obs;
   String? heroTag;
   Box userInfoCache = GStrorage.userInfo;
@@ -36,8 +36,8 @@ class MemberController extends GetxController {
     userInfo = userInfoCache.get('userInfoCache');
     ownerMid = userInfo != null ? userInfo.mid : -1;
     isOwner.value = mid == ownerMid;
-    face.value = Get.arguments['face'] ?? '';
-    heroTag = Get.arguments['heroTag'] ?? '';
+    face.value = Get.arguments?['face'] ?? '';
+    heroTag = Get.arguments?['heroTag'] ?? '';
     relationSearch();
   }
 
@@ -65,7 +65,7 @@ class MemberController extends GetxController {
   // 获取用户播放数 获赞数
   Future<Map<String, dynamic>> getMemberView() async {
     var res = await MemberHttp.memberView(mid: mid);
-    if (res['status']) {
+    if (res['status'] && res['data'] is Map) {
       userStat.addAll(res['data']);
     }
     return res;
@@ -98,14 +98,18 @@ class MemberController extends GetxController {
             ),
             TextButton(
               onPressed: () async {
-                await VideoHttp.relationMod(
+                final res = await VideoHttp.relationMod(
                   mid: mid,
                   act: memberInfo.value.isFollowed! ? 2 : 1,
                   reSrc: 11,
                 );
+                SmartDialog.dismiss();
+                if (res['status'] != true) {
+                  SmartDialog.showToast(res['msg'] ?? '操作失败');
+                  return;
+                }
                 memberInfo.value.isFollowed = !memberInfo.value.isFollowed!;
                 relationSearch();
-                SmartDialog.dismiss();
                 memberInfo.update((val) {});
               },
               child: const Text('确认'),

@@ -64,9 +64,11 @@ class _PlayGesturePageState extends State<PlayGesturePage> {
                 },
               );
               if (result != null) {
-                GlobalDataCache().fullScreenGestureMode = FullScreenGestureMode
-                    .values
-                    .firstWhere((element) => element.values == result);
+                GlobalDataCache().fullScreenGestureMode =
+                    FullScreenGestureMode.values.firstWhere(
+                  (element) => element.values == result,
+                  orElse: () => FullScreenGestureMode.values.last,
+                );
                 fullScreenGestureMode =
                     GlobalDataCache().fullScreenGestureMode.index;
                 setting.put(

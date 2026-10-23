@@ -37,6 +37,11 @@ void main() async {
   Request();
   await Request.setCookie();
 
+  // 全局缓存必须在 runApp 之前完成初始化：
+  // 首帧就会构造 NetworkImgLayer，它读取 GlobalDataCache().imgQuality，
+  // 若此时还没初始化会抛 LateInitializationError（首页各图片位报错）。
+  await GlobalDataCache().initialize();
+
   // 异常捕获 logo记录
   final Catcher2Options releaseConfig = Catcher2Options(
     SilentReportMode(),
@@ -64,7 +69,6 @@ void main() async {
   }
 
   PiliSchame.init();
-  await GlobalDataCache().initialize();
 }
 
 class MyApp extends StatelessWidget {
@@ -73,14 +77,22 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Box setting = GStrorage.setting;
-    // 主题色
-    Color defaultColor =
-        colorThemeTypes[setting.get(SettingBoxKey.customColor, defaultValue: 0)]
-            ['color'];
+    // 主题色（历史值/版本升级可能越界，越界时回退到第一个主题，避免启动白屏）
+    final dynamic storedColor =
+        setting.get(SettingBoxKey.customColor, defaultValue: 0);
+    final int colorIndex =
+        storedColor is int && storedColor >= 0 && storedColor < colorThemeTypes.length
+            ? storedColor
+            : 0;
+    Color defaultColor = colorThemeTypes[colorIndex]['color'] as Color;
     Color brandColor = defaultColor;
-    // 主题模式
-    ThemeType currentThemeValue = ThemeType.values[setting
-        .get(SettingBoxKey.themeMode, defaultValue: ThemeType.system.code)];
+    // 主题模式（同样防止越界）
+    final dynamic storedTheme =
+        setting.get(SettingBoxKey.themeMode, defaultValue: ThemeType.system.code);
+    ThemeType currentThemeValue =
+        storedTheme is int && storedTheme >= 0 && storedTheme < ThemeType.values.length
+            ? ThemeType.values[storedTheme]
+            : ThemeType.system;
     // 是否动态取色
     bool isDynamicColor =
         setting.get(SettingBoxKey.dynamicColor, defaultValue: true);
@@ -90,19 +102,27 @@ class MyApp extends StatelessWidget {
 
     // 强制设置高帧率
     if (Platform.isAndroid) {
-      try {
-        late List modes;
-        FlutterDisplayMode.supported.then((value) {
-          modes = value;
+      FlutterDisplayMode.supported.then((value) {
+        // 异步回调里的异常不会被外层 try 捕获，必须在此处兜住
+        try {
+          final List modes = value;
           var storageDisplay = setting.get(SettingBoxKey.displayMode);
           DisplayMode f = DisplayMode.auto;
           if (storageDisplay != null) {
-            f = modes.firstWhere((e) => e.toString() == storageDisplay);
+            final Iterable matched =
+                modes.where((e) => e.toString() == storageDisplay);
+            if (matched.isNotEmpty) {
+              f = matched.first;
+            }
           }
-          DisplayMode preferred = modes.toList().firstWhere((el) => el == f);
-          FlutterDisplayMode.setPreferredMode(preferred);
-        });
-      } catch (_) {}
+          final Iterable prefer = modes.where((el) => el == f);
+          if (prefer.isNotEmpty) {
+            FlutterDisplayMode.setPreferredMode(prefer.first);
+          }
+        } catch (err) {
+          print('set display mode error: $err');
+        }
+      });
     }
 
     if (Platform.isAndroid) {

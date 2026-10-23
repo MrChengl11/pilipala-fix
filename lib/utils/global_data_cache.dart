@@ -10,37 +10,45 @@ Box localCache = GStrorage.localCache;
 Box videoStorage = GStrorage.video;
 Box userInfoCache = GStrorage.userInfo;
 
+// 全部字段都带默认值：initialize() 是异步的，而首帧 Widget 可能先于它完成
+// （例如 NetworkImgLayer 读 imgQuality），此前会抛 LateInitializationError。
 class GlobalDataCache {
-  late int imgQuality;
-  late FullScreenGestureMode fullScreenGestureMode;
-  late bool enablePlayerControlAnimation;
-  late List<String> actionTypeSort;
+  int imgQuality = 10;
+  FullScreenGestureMode fullScreenGestureMode = FullScreenGestureMode.values.last;
+  bool enablePlayerControlAnimation = true;
+  List<String> actionTypeSort = <String>[
+    'like',
+    'coin',
+    'collect',
+    'watchLater',
+    'share'
+  ];
 
   /// 播放器相关
   // 弹幕开关
-  late bool isOpenDanmu;
+  bool isOpenDanmu = false;
   // 弹幕屏蔽类型
-  late List<dynamic> blockTypes;
+  List<dynamic> blockTypes = <dynamic>[];
   // 弹幕展示区域
-  late double showArea;
+  double showArea = 0.5;
   // 弹幕透明度
-  late double opacityVal;
+  double opacityVal = 1.0;
   // 弹幕字体大小
-  late double fontSizeVal;
+  double fontSizeVal = 1.0;
   // 弹幕显示时间
-  late double danmakuDurationVal;
+  double danmakuDurationVal = 4.0;
   // 弹幕描边宽度
-  late double strokeWidth;
+  double strokeWidth = 1.5;
   // 播放器循环模式
-  late PlayRepeat playRepeat;
+  PlayRepeat playRepeat = PlayRepeat.pause;
   // 播放器默认播放速度
-  late double playbackSpeed;
+  double playbackSpeed = 1.0;
   // 播放器自动长按速度
-  late bool enableAutoLongPressSpeed;
+  bool enableAutoLongPressSpeed = false;
   // 播放器长按速度
-  late double longPressSpeed;
+  double longPressSpeed = 2.0;
   // 播放器速度列表
-  late List<double> speedsList;
+  List<double> speedsList = <double>[];
   // 用户信息
   UserInfoData? userInfo;
 
@@ -57,13 +65,18 @@ class GlobalDataCache {
   Future<void> initialize() async {
     imgQuality = await setting.get(SettingBoxKey.defaultPicQa,
         defaultValue: 10); // 设置全局变量
-    fullScreenGestureMode = FullScreenGestureMode.values[setting.get(
-        SettingBoxKey.fullScreenGestureMode,
-        defaultValue: FullScreenGestureMode.values.last.index) as int];
+    final int gestureIndex = setting.get(SettingBoxKey.fullScreenGestureMode,
+        defaultValue: FullScreenGestureMode.values.last.index) as int;
+    fullScreenGestureMode =
+        (gestureIndex >= 0 && gestureIndex < FullScreenGestureMode.values.length)
+            ? FullScreenGestureMode.values[gestureIndex]
+            : FullScreenGestureMode.values.last;
     enablePlayerControlAnimation = setting
         .get(SettingBoxKey.enablePlayerControlAnimation, defaultValue: true);
-    actionTypeSort = await setting.get(SettingBoxKey.actionTypeSort,
-        defaultValue: ['like', 'coin', 'collect', 'watchLater', 'share']);
+    // Hive 反序列化出的 List 元素是 dynamic，直接赋给 List<String> 会 CastError
+    actionTypeSort = List<String>.from(await setting.get(
+        SettingBoxKey.actionTypeSort,
+        defaultValue: ['like', 'coin', 'collect', 'watchLater', 'share']));
 
     isOpenDanmu =
         await setting.get(SettingBoxKey.enableShowDanmaku, defaultValue: false);
@@ -82,9 +95,9 @@ class GlobalDataCache {
 
     var defaultPlayRepeat = await videoStorage.get(VideoBoxKey.playRepeat,
         defaultValue: PlayRepeat.pause.value);
-    playRepeat = PlayRepeat.values
-        .toList()
-        .firstWhere((e) => e.value == defaultPlayRepeat);
+    playRepeat = PlayRepeat.values.toList().firstWhere(
+        (e) => e.value == defaultPlayRepeat,
+        orElse: () => PlayRepeat.pause);
     playbackSpeed =
         await videoStorage.get(VideoBoxKey.playSpeedDefault, defaultValue: 1.0);
     enableAutoLongPressSpeed = await setting

@@ -208,8 +208,9 @@ class _BangumiPageState extends State<BangumiPage>
         crossAxisSpacing: StyleString.cardSpace,
         // 列数
         crossAxisCount: 3,
-        mainAxisExtent: Get.size.width / 3 / 0.75 +
-            MediaQuery.textScalerOf(context).scale(42.0),
+        mainAxisExtent:
+            (Get.size.width - StyleString.cardSpace * 2) / 3 / 0.75 +
+                MediaQuery.textScalerOf(context).scale(46.0),
       ),
       delegate: SliverChildBuilderDelegate(
         (BuildContext context, int index) {

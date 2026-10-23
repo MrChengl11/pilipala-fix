@@ -14,12 +14,23 @@ class DanmakaHttp {
       'oid': cid,
       'segment_index': segmentIndex,
     };
-    var response = await Request().get(
-      Api.webDanmaku,
-      data: params,
-      extra: {'resType': ResponseType.bytes},
-    );
-    return DmSegMobileReply.fromBuffer(response.data);
+    try {
+      var response = await Request().get(
+        Api.webDanmaku,
+        data: params,
+        extra: {'resType': ResponseType.bytes},
+      );
+      // 风控/未登录时接口返回的是 json 文本而不是弹幕 protobuf
+      if (response.data is! List<int>) {
+        print('queryDanmaku: unexpected response type, segment skipped');
+        return DmSegMobileReply();
+      }
+      return DmSegMobileReply.fromBuffer(response.data);
+    } catch (err) {
+      // 单个分段失败不能中断整条弹幕轨道
+      print('queryDanmaku error: $err');
+      return DmSegMobileReply();
+    }
   }
 
   static Future shootDanmaku({

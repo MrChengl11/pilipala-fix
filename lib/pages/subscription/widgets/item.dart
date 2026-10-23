@@ -36,36 +36,43 @@ class SubItem extends StatelessWidget {
           builder: (context, boxConstraints) {
             double width =
                 (boxConstraints.maxWidth - StyleString.cardSpace * 6) / 2;
-            return SizedBox(
-              height: width / StyleString.aspectRatio,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AspectRatio(
-                    aspectRatio: StyleString.aspectRatio,
-                    child: LayoutBuilder(
-                      builder: (context, boxConstraints) {
-                        double maxWidth = boxConstraints.maxWidth;
-                        double maxHeight = boxConstraints.maxHeight;
-                        return Hero(
-                          tag: heroTag,
-                          child: NetworkImgLayer(
-                            src: subFolderItem.cover,
-                            width: maxWidth,
-                            height: maxHeight,
-                          ),
-                        );
-                      },
+            // 历史实现把整行高度写死成「封面高度」(width / aspectRatio)，
+            // 但右侧文字区是 标题 + 2 行元信息 + 底部取消订阅按钮，
+            // 在 360dp 屏上需要的内容高度超过封面高度，
+            // 于是每一行都 RenderFlex overflow（20px，收紧行高后仍有 13px）。
+            // 靠估算高度总会有偏差（标题 1 行/2 行、字体缩放都会变），
+            // 所以这里不再固定行高：封面用固定宽高保持比例，
+            // 行高由 Row 里较高的子项决定，让内容自然撑开。
+            final double coverWidth = width;
+            final double coverHeight = coverWidth / StyleString.aspectRatio;
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: coverWidth,
+                  height: coverHeight,
+                  child: Hero(
+                    tag: heroTag,
+                    child: NetworkImgLayer(
+                      src: subFolderItem.cover,
+                      width: coverWidth,
+                      height: coverHeight,
                     ),
                   ),
-                  VideoContent(
-                    subFolderItem: subFolderItem,
-                    isOwner: isOwner,
-                    cancelSub: cancelSub,
-                  )
-                ],
-              ),
+                ),
+                Expanded(
+                  child: ConstrainedBox(
+                    // 文字区至少与封面等高，保证左右视觉齐平
+                    constraints: BoxConstraints(minHeight: coverHeight),
+                    child: VideoContent(
+                      subFolderItem: subFolderItem,
+                      isOwner: isOwner,
+                      cancelSub: cancelSub,
+                    ),
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -92,21 +99,28 @@ class VideoContent extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(10, 2, 6, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               subFolderItem.title!,
               textAlign: TextAlign.start,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0.3,
+                height: 1.2,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               '合集 UP主：${subFolderItem.upper!.name!}',
               textAlign: TextAlign.start,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: Theme.of(context).textTheme.labelMedium!.fontSize,
+                height: 1.2,
                 color: Theme.of(context).colorScheme.outline,
               ),
             ),
@@ -116,15 +130,23 @@ class VideoContent extends StatelessWidget {
               textAlign: TextAlign.start,
               style: TextStyle(
                 fontSize: Theme.of(context).textTheme.labelMedium!.fontSize,
+                height: 1.2,
                 color: Theme.of(context).colorScheme.outline,
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 2),
             isOwner
                 ? Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       IconButton(
+                        // 不限制尺寸时 IconButton 会占满 48x48 的最小点击区，
+                        // 直接把这一行撑到 48dp 高。这里收成 24x24。
+                        constraints: const BoxConstraints.tightFor(
+                          width: 24,
+                          height: 24,
+                        ),
+                        padding: EdgeInsets.zero,
                         style: ButtonStyle(
                           padding: MaterialStateProperty.all(EdgeInsets.zero),
                         ),

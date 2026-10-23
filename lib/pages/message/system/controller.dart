@@ -18,16 +18,23 @@ class MessageSystemController extends GetxController {
     var accountRes = results[1];
 
     if (systemRes['status'] || accountRes['status']) {
-      // 处理返回的数据
+      if (type == 'init') {
+        systemItems.clear();
+      }
+      // 处理返回的数据（接口失败时 data 可能为 null，需兜底为空列表）
+      List systemData = systemRes['status'] ? (systemRes['data'] ?? []) : [];
+      List accountData = accountRes['status'] ? (accountRes['data'] ?? []) : [];
       List<MessageSystemModel> combinedData = [
-        ...systemRes['data'],
-        ...accountRes['data']
+        ...systemData,
+        ...accountData
       ];
-      combinedData.sort((a, b) => b.cursor!.compareTo(a.cursor!));
+      combinedData.sort((a, b) => (b.cursor ?? 0).compareTo(a.cursor ?? 0));
       systemItems.addAll(combinedData);
       systemItems.refresh();
-      if (systemItems.isNotEmpty) {
-        systemMarkRead(systemItems.first.cursor!);
+      final int? firstCursor =
+          systemItems.isNotEmpty ? systemItems.first.cursor : null;
+      if (firstCursor != null) {
+        systemMarkRead(firstCursor);
       }
     } else {
       SmartDialog.showToast(systemRes['msg'] ?? accountRes['msg']);

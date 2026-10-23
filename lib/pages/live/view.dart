@@ -134,9 +134,13 @@ class _LivePageState extends State<LivePage>
         // 列数
         crossAxisCount: crossAxisCount,
         mainAxisExtent:
-            Get.size.width / crossAxisCount / StyleString.aspectRatio +
-                MediaQuery.textScalerOf(context).scale(
-                  (crossAxisCount == 1 ? 48 : 68),
+            (Get.size.width - StyleString.safeSpace * (crossAxisCount - 1)) /
+                    crossAxisCount /
+                    StyleString.aspectRatio +
+                StyleString.videoContentExtent(
+                  crossAxisCount,
+                  MediaQuery.textScalerOf(context),
+                  hasStatLine: false,
                 ),
       ),
       delegate: SliverChildBuilderDelegate(

@@ -45,8 +45,8 @@ class VideoHttp {
       );
       if (res.data['code'] == 0) {
         List<RecVideoItemModel> list = [];
-        List<int> blackMidsList =
-            setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]);
+        final List<int> blackMidsList = List<int>.from(
+            setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]));
         for (var i in res.data['data']['item']) {
           //过滤掉live与ad，以及拉黑用户
           if (i['goto'] == 'av' &&
@@ -90,8 +90,8 @@ class VideoHttp {
     );
     if (res.data['code'] == 0) {
       List<RecVideoItemAppModel> list = [];
-      List<int> blackMidsList =
-          setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]);
+      final List<int> blackMidsList = List<int>.from(
+          setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]));
       for (var i in res.data['data']['items']) {
         // 屏蔽推广和拉黑用户
         if (i['card_goto'] != 'ad_av' &&
@@ -119,8 +119,8 @@ class VideoHttp {
       );
       if (res.data['code'] == 0) {
         List<HotVideoItemModel> list = [];
-        List<int> blackMidsList =
-            setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]);
+        final List<int> blackMidsList = List<int>.from(
+            setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]));
         for (var i in res.data['data']['list']) {
           if (!blackMidsList.contains(i['owner']['mid'])) {
             list.add(HotVideoItemModel.fromJson(i));
@@ -157,15 +157,16 @@ class VideoHttp {
       data['try_look'] = 1;
     }
 
-    Map params = await WbiSign().makSign({
-      ...data,
-      'fourk': 1,
-      'voice_balance': 1,
-      'gaia_source': 'pre-load',
-      'web_location': 1550101,
-    });
-
     try {
+      // makSign 内部要发网络请求，必须放在 try 内：
+      // 否则取 wbi key 失败时异常会直接冒到调用方，视频地址加载不出来且没有提示
+      Map params = await WbiSign().makSign({
+        ...data,
+        'fourk': 1,
+        'voice_balance': 1,
+        'gaia_source': 'pre-load',
+        'web_location': 1550101,
+      });
       var res = await Request().get(Api.videoUrl, data: params);
       if (res.data['code'] == 0) {
         return {
@@ -187,16 +188,33 @@ class VideoHttp {
 
   // 视频信息 标题、简介
   static Future videoIntro({required String bvid}) async {
-    var res = await Request().get(Api.videoIntro, data: {'bvid': bvid});
-    if (res.data['code'] == 0) {
-      VideoDetailResponse result = VideoDetailResponse.fromJson(res.data);
-      return {'status': true, 'data': result.data!};
-    } else {
+    try {
+      var res = await Request().get(Api.videoIntro, data: {'bvid': bvid});
+      if (res.data['code'] == 0) {
+        VideoDetailResponse result = VideoDetailResponse.fromJson(res.data);
+        if (result.data == null) {
+          return {
+            'status': false,
+            'data': null,
+            'code': res.data['code'],
+            'msg': '视频信息解析失败',
+          };
+        }
+        return {'status': true, 'data': result.data};
+      } else {
+        return {
+          'status': false,
+          'data': null,
+          'code': res.data['code'],
+          'msg': res.data['message'],
+        };
+      }
+    } catch (err) {
+      print('videoIntro error: $err');
       return {
         'status': false,
         'data': null,
-        'code': res.data['code'],
-        'msg': res.data['message'],
+        'msg': '视频信息加载失败',
       };
     }
   }
@@ -393,8 +411,8 @@ class VideoHttp {
     );
     if (res.data['code'] == 0) {
       if (act == 5) {
-        List<int> blackMidsList =
-            setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]);
+        final List<int> blackMidsList = List<int>.from(
+            setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]));
         blackMidsList.add(mid);
         setting.put(SettingBoxKey.blackMidsList, blackMidsList);
       }
@@ -434,9 +452,18 @@ class VideoHttp {
       },
     );
     if (res.data['code'] == 0) {
-      return {'status': true, 'msg': res.data['result']['toast']};
+      return {
+        'status': true,
+        'msg': res.data['result']?['toast']?.toString() ?? '追番成功',
+      };
     } else {
-      return {'status': false, 'msg': res.data['result']['toast']};
+      // 失败响应通常没有 result 字段（如 -101 未登录），直接取会 NoSuchMethodError
+      return {
+        'status': false,
+        'msg': res.data['result']?['toast']?.toString() ??
+            res.data['message']?.toString() ??
+            '操作失败',
+      };
     }
   }
 
@@ -450,9 +477,17 @@ class VideoHttp {
       },
     );
     if (res.data['code'] == 0) {
-      return {'status': true, 'msg': res.data['result']['toast']};
+      return {
+        'status': true,
+        'msg': res.data['result']?['toast']?.toString() ?? '已取消追番',
+      };
     } else {
-      return {'status': false, 'msg': res.data['result']['toast']};
+      return {
+        'status': false,
+        'msg': res.data['result']?['toast']?.toString() ??
+            res.data['message']?.toString() ??
+            '操作失败',
+      };
     }
   }
 
@@ -517,8 +552,8 @@ class VideoHttp {
       var res = await Request().get(rankApi);
       if (res.data['code'] == 0) {
         List<HotVideoItemModel> list = [];
-        List<int> blackMidsList =
-            setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]);
+        final List<int> blackMidsList = List<int>.from(
+            setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]));
         for (var i in res.data['data']['list']) {
           if (!blackMidsList.contains(i['owner']['mid'])) {
             list.add(HotVideoItemModel.fromJson(i));

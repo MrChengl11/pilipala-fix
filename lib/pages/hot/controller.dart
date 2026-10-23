@@ -14,15 +14,16 @@ class HotController extends GetxController {
 
   // 获取推荐
   Future queryHotFeed(type) async {
+    if (type == 'init' || type == 'onRefresh') {
+      _currentPage = 1;
+    }
     var res = await VideoHttp.hotVideoList(
       pn: _currentPage,
       ps: _count,
     );
     if (res['status']) {
-      if (type == 'init') {
+      if (type == 'init' || type == 'onRefresh') {
         videoList.value = res['data'];
-      } else if (type == 'onRefresh') {
-        videoList.insertAll(0, res['data']);
       } else if (type == 'onLoad') {
         videoList.addAll(res['data']);
       }
@@ -34,12 +35,12 @@ class HotController extends GetxController {
 
   // 下拉刷新
   Future onRefresh() async {
-    queryHotFeed('onRefresh');
+    return queryHotFeed('onRefresh');
   }
 
   // 上拉加载
   Future onLoad() async {
-    queryHotFeed('onLoad');
+    return queryHotFeed('onLoad');
   }
 
   // 返回顶部并刷新

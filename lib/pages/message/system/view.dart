@@ -37,8 +37,20 @@ class _MessageSystemPageState extends State<MessageSystemPage> {
           future: _futureBuilderFuture,
           builder: (BuildContext context, AsyncSnapshot snapshot) {
             if (snapshot.connectionState == ConnectionState.done) {
-              if (snapshot.data == null) {
-                return const SizedBox();
+              if (snapshot.hasError || snapshot.data == null) {
+                return CustomScrollView(
+                  slivers: [
+                    HttpError(
+                      errMsg: '请求异常',
+                      fn: () {
+                        setState(() {
+                          _futureBuilderFuture =
+                              _messageSystemCtr.queryAndProcessMessages();
+                        });
+                      },
+                    )
+                  ],
+                );
               }
               if (snapshot.data['status']) {
                 final systemItems = _messageSystemCtr.systemItems;

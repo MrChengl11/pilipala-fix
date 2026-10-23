@@ -333,19 +333,23 @@ class Utils {
       AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
       // [arm64-v8a]
       String abi = androidInfo.supportedAbis.first;
-      late String downloadUrl;
-      if (data.assets.isNotEmpty) {
-        for (var i in data.assets) {
-          if (i.downloadUrl.contains(abi)) {
-            downloadUrl = i.downloadUrl;
-          }
+      String? downloadUrl;
+      for (var i in data.assets) {
+        if (i.downloadUrl.contains(abi)) {
+          downloadUrl = i.downloadUrl;
+          break;
         }
-        // 应用外下载
-        launchUrl(
-          Uri.parse(downloadUrl),
-          mode: LaunchMode.externalApplication,
-        );
       }
+      if (downloadUrl == null) {
+        // late 变量未赋值时读取会 LateInitializationError
+        SmartDialog.showToast('未找到适配当前设备的安装包');
+        return;
+      }
+      // 应用外下载
+      await launchUrl(
+        Uri.parse(downloadUrl),
+        mode: LaunchMode.externalApplication,
+      );
     }
   }
 

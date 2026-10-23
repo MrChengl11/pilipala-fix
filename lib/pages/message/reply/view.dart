@@ -1,6 +1,7 @@
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/widgets/http_error.dart';
 import 'package:pilipala/common/widgets/network_img_layer.dart';
@@ -128,7 +129,13 @@ class ReplyItem extends StatelessWidget {
 
     return InkWell(
       onTap: () async {
-        final int cid = await SearchHttp.ab2c(bvid: bvid);
+        int? cid;
+        try {
+          cid = await SearchHttp.ab2c(bvid: bvid);
+        } catch (e) {
+          SmartDialog.showToast('视频可能已失效');
+          return;
+        }
         final String heroTag = Utils.makeHeroTag(bvid);
         Get.toNamed<dynamic>(
           '/video?bvid=$bvid&cid=$cid',
@@ -231,9 +238,12 @@ class ReplyItem extends StatelessWidget {
 InlineSpan buildContent(BuildContext context, item) {
   List? atDetails = item!.atDetails;
   final List<InlineSpan> spanChilds = <InlineSpan>[];
-  if (atDetails!.isNotEmpty) {
-    final String patternStr =
-        atDetails.map<String>((e) => '@${e['nickname']}').toList().join('|');
+  if (atDetails != null && atDetails.isNotEmpty) {
+    // 昵称中可能包含正则元字符，必须转义后再拼接
+    final String patternStr = atDetails
+        .map<String>((e) => RegExp.escape('@${e['nickname']}'))
+        .toList()
+        .join('|');
     final RegExp regExp = RegExp(patternStr);
     item.sourceContent!.splitMapJoin(
       regExp,
@@ -243,9 +253,11 @@ InlineSpan buildContent(BuildContext context, item) {
             text: match.group(0),
             recognizer: TapGestureRecognizer()
               ..onTap = () {
-                var currentUser = atDetails
-                    .where((e) => e['nickname'] == match.group(0)!.substring(1))
-                    .first;
+                final String nickname = match.group(0)!.substring(1);
+                final List matchedUsers =
+                    atDetails.where((e) => e['nickname'] == nickname).toList();
+                if (matchedUsers.isEmpty) return;
+                var currentUser = matchedUsers.first;
                 Get.toNamed('/member?mid=${currentUser['mid']}', arguments: {
                   'face': currentUser['avatar'],
                 });

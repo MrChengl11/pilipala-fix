@@ -222,9 +222,11 @@ class _HeaderControlState extends State<HeaderControl> {
   void showShootDanmakuSheet() {
     final TextEditingController textController = TextEditingController();
     bool isSending = false; // 追踪是否正在发送
+    BuildContext? dialogContext; // 弹窗内层 context，用于判断弹窗是否已被用户关闭
     showDialog(
       context: Get.context!,
       builder: (BuildContext context) {
+        dialogContext = context;
         // TODO: 支持更多类型和颜色的弹幕
         return AlertDialog(
           title: const Text('发送弹幕（测试）'),
@@ -256,9 +258,11 @@ class _HeaderControlState extends State<HeaderControl> {
                           SmartDialog.showToast('弹幕内容不能超过100个字符');
                           return;
                         }
-                        setState(() {
-                          isSending = true; // 开始发送，更新状态
-                        });
+                        if (dialogContext?.mounted ?? false) {
+                          setState(() {
+                            isSending = true; // 开始发送，更新状态
+                          });
+                        }
                         //修改按钮文字
                         final dynamic res = await DanmakaHttp.shootDanmaku(
                           oid: widget.videoDetailCtr!.cid.value,
@@ -268,6 +272,11 @@ class _HeaderControlState extends State<HeaderControl> {
                               widget.controller!.position.value.inMilliseconds,
                           type: 1,
                         );
+                        // 弹窗已被用户关闭（点空白/取消）：不再 setState，也不再继续提示或关闭页面，
+                        // 否则会抛 setState() after dispose()，且 Get.back() 会把视频详情页一起 pop 掉
+                        if (!(dialogContext?.mounted ?? false)) {
+                          return;
+                        }
                         setState(() {
                           isSending = false; // 发送结束，更新状态
                         });
@@ -296,7 +305,10 @@ class _HeaderControlState extends State<HeaderControl> {
           ],
         );
       },
-    );
+    ).then((_) {
+      // 弹窗关闭后释放输入框控制器
+      textController.dispose();
+    });
   }
 
   /// 定时关闭

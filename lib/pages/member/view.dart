@@ -37,27 +37,29 @@ class _MemberPageState extends State<MemberPage>
   void initState() {
     super.initState();
     mid = int.parse(Get.parameters['mid']!);
-    heroTag = Get.arguments['heroTag'] ?? Utils.makeHeroTag(mid);
+    heroTag = Get.arguments?['heroTag'] ?? Utils.makeHeroTag(mid);
     _memberController = Get.put(MemberController(), tag: heroTag);
     _futureBuilderFuture = _memberController.getInfo();
     _memberSeasonsFuture = _memberController.getMemberSeasons();
     _memberCoinsFuture = _memberController.getRecentCoinVideo();
     _memberLikeFuture = _memberController.getRecentLikeVideo();
-    _extendNestCtr.addListener(
-      () {
-        final double offset = _extendNestCtr.position.pixels;
-        if (offset > 100) {
-          appbarStream.add(true);
-        } else {
-          appbarStream.add(false);
-        }
-      },
-    );
+    _extendNestCtr.addListener(_onExtendScroll);
+  }
+
+  // 滚动监听：必须保存引用，dispose 时才能真正移除
+  void _onExtendScroll() {
+    final double offset = _extendNestCtr.position.pixels;
+    if (offset > 100) {
+      appbarStream.add(true);
+    } else {
+      appbarStream.add(false);
+    }
   }
 
   @override
   void dispose() {
-    _extendNestCtr.removeListener(() {});
+    _extendNestCtr.removeListener(_onExtendScroll);
+    _extendNestCtr.dispose();
     appbarStream.close();
     super.dispose();
   }

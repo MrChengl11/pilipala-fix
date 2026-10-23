@@ -110,31 +110,59 @@ class WbiSign {
   // 获取最新的 img_key 和 sub_key 可以从缓存中获取
   static Future<Map<String, dynamic>> getWbiKeys() async {
     final DateTime nowDate = DateTime.now();
-    if (localCache.get(LocalCacheKey.wbiKeys) != null &&
-        DateTime.fromMillisecondsSinceEpoch(
-                    localCache.get(LocalCacheKey.timeStamp) as int)
-                .day ==
-            nowDate.day) {
-      final Map cacheWbiKeys = localCache.get('wbiKeys');
-      return Map<String, dynamic>.from(cacheWbiKeys);
+    Map<String, dynamic>? cachedKeys;
+    final dynamic rawCacheKeys = localCache.get(LocalCacheKey.wbiKeys);
+    if (rawCacheKeys is Map) {
+      cachedKeys = Map<String, dynamic>.from(rawCacheKeys);
     }
-    var resp =
-        await Request().get('https://api.bilibili.com/x/web-interface/nav');
-    var jsonContent = resp.data['data'];
-
-    final String imgUrl = jsonContent['wbi_img']['img_url'];
-    final String subUrl = jsonContent['wbi_img']['sub_url'];
-    final Map<String, dynamic> wbiKeys = {
-      'imgKey': imgUrl
-          .substring(imgUrl.lastIndexOf('/') + 1, imgUrl.length)
-          .split('.')[0],
-      'subKey': subUrl
-          .substring(subUrl.lastIndexOf('/') + 1, subUrl.length)
-          .split('.')[0]
-    };
-    localCache.put(LocalCacheKey.wbiKeys, wbiKeys);
-    localCache.put(LocalCacheKey.timeStamp, nowDate.millisecondsSinceEpoch);
-    return wbiKeys;
+    final int? cacheTs = localCache.get(LocalCacheKey.timeStamp) as int?;
+    if (cachedKeys != null && cacheTs != null) {
+      final DateTime cacheDate =
+          DateTime.fromMillisecondsSinceEpoch(cacheTs);
+      // 原实现只比较 .day，1 月 5 日与 2 月 5 日的 day 都是 5，
+      // 会跨月复用已经失效的 key（B 站每天轮换）→ 所有 WBI 接口 403。
+      if (cacheDate.year == nowDate.year &&
+          cacheDate.month == nowDate.month &&
+          cacheDate.day == nowDate.day) {
+        return cachedKeys;
+      }
+    }
+    try {
+      var resp =
+          await Request().get('https://api.bilibili.com/x/web-interface/nav');
+      final dynamic respData = resp.data;
+      final dynamic jsonContent =
+          respData is Map ? respData['data'] : null;
+      final dynamic wbiImg =
+          jsonContent is Map ? jsonContent['wbi_img'] : null;
+      if (wbiImg is! Map) {
+        throw Exception('nav 接口未返回 wbi_img');
+      }
+      final String imgUrl = wbiImg['img_url'].toString();
+      final String subUrl = wbiImg['sub_url'].toString();
+      if (imgUrl.isEmpty || subUrl.isEmpty) {
+        throw Exception('wbi_img 内容为空');
+      }
+      final Map<String, dynamic> wbiKeys = {
+        'imgKey': imgUrl
+            .substring(imgUrl.lastIndexOf('/') + 1, imgUrl.length)
+            .split('.')[0],
+        'subKey': subUrl
+            .substring(subUrl.lastIndexOf('/') + 1, subUrl.length)
+            .split('.')[0]
+      };
+      localCache.put(LocalCacheKey.wbiKeys, wbiKeys);
+      localCache.put(LocalCacheKey.timeStamp, nowDate.millisecondsSinceEpoch);
+      return wbiKeys;
+    } catch (err) {
+      // 断网/服务端异常时不能把 NoSuchMethodError 抛给 UI：
+      // 有旧缓存先用旧缓存（失败也是正常的接口错误提示），否则返回空 key
+      print('getWbiKeys error: $err');
+      if (cachedKeys != null && cachedKeys['imgKey'] != null) {
+        return cachedKeys;
+      }
+      return <String, dynamic>{'imgKey': '', 'subKey': ''};
+    }
   }
 
   Future<Map<String, dynamic>> makSign(Map<String, dynamic> params) async {

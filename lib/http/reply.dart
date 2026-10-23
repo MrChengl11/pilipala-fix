@@ -27,7 +27,7 @@ class ReplyHttp {
     } else {
       return {
         'status': false,
-        'date': [],
+        'data': [],
         'code': res.data['code'],
         'msg': res.data['message'],
       };
@@ -63,7 +63,7 @@ class ReplyHttp {
       };
       return {
         'status': false,
-        'date': [],
+        'data': [],
         'msg': errMap[res.data['code']] ?? '请求异常',
       };
     }
@@ -91,7 +91,7 @@ class ReplyHttp {
     } else {
       return {
         'status': false,
-        'date': [],
+        'data': [],
         'msg': res.data['message'],
       };
     }
@@ -110,7 +110,7 @@ class ReplyHttp {
     } else {
       return {
         'status': false,
-        'date': [],
+        'data': [],
         'msg': res.data['message'],
       };
     }

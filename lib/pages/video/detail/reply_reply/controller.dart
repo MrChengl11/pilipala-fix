@@ -56,7 +56,11 @@ class VideoReplyReplyController extends GetxController {
         replyList.value = replies;
       } else {
         // 每次回复之后，翻页请求有且只有相同的一条回复数据
-        if (replies.length == 1 && replies.last.rpid == replyList.last.rpid) {
+        if (replies.length == 1 &&
+            replyList.isNotEmpty &&
+            replies.last.rpid == replyList.last.rpid) {
+          noMore.value = '没有更多了';
+          isLoadingMore = false;
           return;
         }
         replyList.addAll(replies);

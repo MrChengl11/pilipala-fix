@@ -126,10 +126,18 @@ class _RcmdPageState extends State<RcmdPage>
     //   crossAxisCount = 1;
     // }
     int crossAxisCount = ctr.crossAxisCount.value;
-    double mainAxisExtent = (Get.size.width /
-            crossAxisCount /
-            StyleString.aspectRatio) +
-        (crossAxisCount == 1 ? 68 : MediaQuery.textScalerOf(context).scale(86));
+    // 卡片总高 = 封面图高 + 文字区域高
+    // 封面宽度要扣掉列间距（列间距只在列之间，共 crossAxisCount-1 个）
+    final double totalWidth = Get.size.width;
+    final double coverWidth =
+        (totalWidth - StyleString.safeSpace * (crossAxisCount - 1)) /
+            crossAxisCount;
+    final double coverHeight = coverWidth / StyleString.aspectRatio;
+    double mainAxisExtent = coverHeight +
+        StyleString.videoContentExtent(
+          crossAxisCount,
+          MediaQuery.textScalerOf(context),
+        );
     return SliverGrid(
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         // 行间距

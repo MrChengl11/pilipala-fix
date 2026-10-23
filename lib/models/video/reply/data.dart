@@ -20,21 +20,26 @@ class ReplyData {
   ReplyUpper? upper;
 
   ReplyData.fromJson(Map<String, dynamic> json) {
-    page = ReplyPage.fromJson(json['page']);
-    config = ReplyConfig.fromJson(json['config']);
+    // 接口异常（如视频被删/被限制）时 page/config/upper 可能缺失，逐项判空，
+    // 否则 ReplyPage.fromJson(null) 会直接抛 TypeError 导致评论区白屏。
+    final dynamic upperJson = json['upper'];
+    final dynamic upperMid = upperJson is Map ? upperJson['mid'] : null;
+    page = json['page'] != null ? ReplyPage.fromJson(json['page']) : null;
+    config =
+        json['config'] != null ? ReplyConfig.fromJson(json['config']) : null;
     replies = json['replies'] != null
         ? json['replies']
             .map<ReplyItemModel>(
-                (item) => ReplyItemModel.fromJson(item, json['upper']['mid']))
+                (item) => ReplyItemModel.fromJson(item, upperMid))
             .toList()
         : [];
     topReplies = json['top_replies'] != null
         ? json['top_replies']
             .map<ReplyItemModel>((item) => ReplyItemModel.fromJson(
-                item, json['upper']['mid'],
+                item, upperMid,
                 isTopStatus: true))
             .toList()
         : [];
-    upper = ReplyUpper.fromJson(json['upper']);
+    upper = upperJson != null ? ReplyUpper.fromJson(upperJson) : null;
   }
 }

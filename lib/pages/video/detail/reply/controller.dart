@@ -24,6 +24,8 @@ class VideoReplyController extends GetxController {
   // 当前页
   int currentPage = 0;
   bool isLoadingMore = false;
+  // 请求序号：切换排序等场景下用于丢弃过期响应，避免旧数据串页
+  int _reqSeq = 0;
   RxString noMore = ''.obs;
   int ps = 20;
   RxInt count = 0.obs;
@@ -56,6 +58,7 @@ class VideoReplyController extends GetxController {
       return;
     }
     isLoadingMore = true;
+    final int reqSeq = ++_reqSeq;
     if (type == 'init') {
       currentPage = 0;
       noMore.value = '';
@@ -71,6 +74,10 @@ class VideoReplyController extends GetxController {
       type: ReplyType.video.index,
       sort: _sortType.index,
     );
+    if (reqSeq != _reqSeq) {
+      // 已发起更新的请求（如切换排序），丢弃本次过期响应；isLoadingMore 由新请求负责复位
+      return res;
+    }
     if (res['status']) {
       final List<ReplyItemModel> replies = res['data'].replies;
       if (replies.isNotEmpty) {
@@ -133,6 +140,8 @@ class VideoReplyController extends GetxController {
       currentPage = 0;
       noMore.value = '';
       replyList.clear();
+      // 已清空列表，必须复位加载标记，否则会被 queryReplyList 的早退判断挡住而不发请求
+      isLoadingMore = false;
       queryReplyList(type: 'init');
     });
   }

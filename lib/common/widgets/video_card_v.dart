@@ -193,74 +193,84 @@ class VideoContent extends StatelessWidget {
       padding: crossAxisCount == 1
           ? const EdgeInsets.fromLTRB(9, 9, 9, 4)
           : const EdgeInsets.fromLTRB(5, 8, 5, 4),
+      // 网格里的 mainAxisExtent 是按内容估算出来的，字体缩放/个性化字体
+      // 仍可能让实际高度超出一点。标题与作者行用 Flexible 包裹，空间不足时
+      // 被压缩而不是抛 RenderFlex overflow。
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            videoItem.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          Flexible(
+            child: Text(
+              videoItem.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           if (crossAxisCount > 1) ...[
             const SizedBox(height: 2),
             VideoStat(videoItem: videoItem, crossAxisCount: crossAxisCount),
           ],
           if (crossAxisCount == 1) const SizedBox(height: 4),
-          Row(
-            children: [
-              if (videoItem.goto == 'bangumi')
-                _buildBadge(videoItem.bangumiBadge, 'line', 9),
-              if (videoItem.rcmdReason != null)
-                _buildBadge(videoItem.rcmdReason, 'color'),
-              if (videoItem.goto == 'picture') _buildBadge('动态', 'line', 9),
-              if (videoItem.isFollowed == 1) _buildBadge('已关注', 'color'),
-              Expanded(
-                flex: crossAxisCount == 1 ? 0 : 1,
-                child: Text(
-                  videoItem.owner.name,
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: Theme.of(context).textTheme.labelMedium!.fontSize,
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                ),
-              ),
-              if (crossAxisCount == 1) ...[
-                const SizedBox(width: 10),
-                VideoStat(
-                  videoItem: videoItem,
-                  crossAxisCount: crossAxisCount,
-                ),
-                const Spacer(),
-              ],
-              if (videoItem.goto == 'av')
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () {
-                      feedBack();
-                      showModalBottomSheet(
-                        context: context,
-                        useRootNavigator: true,
-                        isScrollControlled: true,
-                        builder: (context) {
-                          return MorePanel(
-                            videoItem: videoItem,
-                            blockUserCb: blockUserCb,
-                          );
-                        },
-                      );
-                    },
-                    icon: Icon(
-                      Icons.more_vert_outlined,
+          Flexible(
+            child: Row(
+              children: [
+                if (videoItem.goto == 'bangumi')
+                  _buildBadge(videoItem.bangumiBadge, 'line', 9),
+                if (videoItem.rcmdReason != null)
+                  _buildBadge(videoItem.rcmdReason, 'color'),
+                if (videoItem.goto == 'picture') _buildBadge('动态', 'line', 9),
+                if (videoItem.isFollowed == 1) _buildBadge('已关注', 'color'),
+                Expanded(
+                  flex: crossAxisCount == 1 ? 0 : 1,
+                  child: Text(
+                    videoItem.owner.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize:
+                          Theme.of(context).textTheme.labelMedium!.fontSize,
                       color: Theme.of(context).colorScheme.outline,
-                      size: 14,
                     ),
                   ),
-                )
-            ],
+                ),
+                if (crossAxisCount == 1) ...[
+                  const SizedBox(width: 10),
+                  VideoStat(
+                    videoItem: videoItem,
+                    crossAxisCount: crossAxisCount,
+                  ),
+                  const Spacer(),
+                ],
+                if (videoItem.goto == 'av')
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        feedBack();
+                        showModalBottomSheet(
+                          context: context,
+                          useRootNavigator: true,
+                          isScrollControlled: true,
+                          builder: (context) {
+                            return MorePanel(
+                              videoItem: videoItem,
+                              blockUserCb: blockUserCb,
+                            );
+                          },
+                        );
+                      },
+                      icon: Icon(
+                        Icons.more_vert_outlined,
+                        color: Theme.of(context).colorScheme.outline,
+                        size: 14,
+                      ),
+                    ),
+                  )
+              ],
+            ),
           ),
         ],
       ),

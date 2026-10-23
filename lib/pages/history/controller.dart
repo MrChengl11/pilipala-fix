@@ -33,8 +33,15 @@ class HistoryController extends GetxController {
     int max = 0;
     int viewAt = 0;
     if (type == 'onload') {
-      max = historyList.last.history!.oid!;
-      viewAt = historyList.last.viewAt!;
+      if (historyList.isEmpty) {
+        return {'status': false, 'msg': '暂无更多数据'};
+      }
+      max = historyList.last.history?.oid ?? 0;
+      viewAt = historyList.last.viewAt ?? 0;
+      // 直播/专栏等历史的 oid 为空，不能作为翻页游标
+      if (max == 0) {
+        return {'status': false, 'msg': '暂无更多数据'};
+      }
     }
     isLoadingMore.value = true;
     var res = await UserHttp.historyList(max, viewAt);
@@ -50,11 +57,11 @@ class HistoryController extends GetxController {
   }
 
   Future onLoad() async {
-    queryHistoryList(type: 'onload');
+    return queryHistoryList(type: 'onload');
   }
 
   Future onRefresh() async {
-    queryHistoryList(type: 'onRefresh');
+    return queryHistoryList(type: 'onRefresh');
   }
 
   // 暂停观看历史
@@ -121,9 +128,11 @@ class HistoryController extends GetxController {
                 SmartDialog.dismiss();
                 if (res.data['code'] == 0) {
                   SmartDialog.showToast('清空观看历史');
+                  historyList.clear();
+                } else {
+                  SmartDialog.showToast(res.data['message'] ?? '清空失败');
                 }
                 SmartDialog.dismiss();
-                historyList.clear();
               },
               child: const Text('确认清空'),
             )

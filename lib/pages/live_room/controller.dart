@@ -47,7 +47,8 @@ class LiveRoomController extends GetxController {
   RxMap<String, String> joinRoomTip = {'userName': '', 'message': ''}.obs;
   // 直播间弹幕开关 默认打开
   RxBool danmakuSwitch = true.obs;
-  late String buvid;
+  String buvid = '';
+  StreamSubscription? danmakuSwitchSub;
   RxBool isPortrait = false.obs;
 
   @override
@@ -64,7 +65,7 @@ class LiveRoomController extends GetxController {
             ? liveItem.pic
             : (liveItem.cover != null && liveItem.cover != '')
                 ? liveItem.cover
-                : null;
+                : '';
       }
       Request.getBuvid().then((value) => buvid = value);
     }
@@ -75,7 +76,7 @@ class LiveRoomController extends GetxController {
       userId = userInfo.mid;
     }
     liveDanmakuInfo().then((value) => initSocket());
-    danmakuSwitch.listen((p0) {
+    danmakuSwitchSub = danmakuSwitch.listen((p0) {
       plPlayerController.isOpenDanmu.value = p0;
     });
   }
@@ -116,13 +117,21 @@ class LiveRoomController extends GetxController {
       acceptQnList = acceptQn.map((e) {
         return {
           'code': e,
+          // 服务端返回的 qn 未必都在本地枚举里（如新增画质），
+          // 缺少 orElse 会抛 StateError: No element
           'desc': LiveQuality.values
-              .firstWhere((element) => element.code == e)
+              .firstWhere(
+                (element) => element.code == e,
+                orElse: () => LiveQuality.values.last,
+              )
               .description,
         };
       }).toList();
       currentQnDesc.value = LiveQuality.values
-          .firstWhere((element) => element.code == currentQn)
+          .firstWhere(
+            (element) => element.code == currentQn,
+            orElse: () => LiveQuality.values.last,
+          )
           .description;
       String videoUrl = enableCDN
           ? VideoUtils.getCdnUrl(item)
@@ -161,7 +170,10 @@ class LiveRoomController extends GetxController {
     }
     currentQn = qn;
     currentQnDesc.value = LiveQuality.values
-        .firstWhere((element) => element.code == currentQn)
+        .firstWhere(
+          (element) => element.code == currentQn,
+          orElse: () => LiveQuality.values.last,
+        )
         .description;
     await queryLiveInfo();
   }
@@ -296,6 +308,8 @@ class LiveRoomController extends GetxController {
   @override
   void onClose() {
     heartBeat();
+    danmakuSwitchSub?.cancel();
+    inputController.dispose();
     plSocket?.onClose();
     super.onClose();
   }

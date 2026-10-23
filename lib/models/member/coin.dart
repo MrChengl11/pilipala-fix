@@ -65,8 +65,8 @@ class MemberCoinsDataModel {
     title = json['title'];
     tname = json['tname'];
     videos = json['videos'];
-    view = json['stat']['view'];
-    danmaku = json['stat']['danmaku'];
+    view = json['stat'] == null ? null : json['stat']['view'];
+    danmaku = json['stat'] == null ? null : json['stat']['danmaku'];
   }
 }
 

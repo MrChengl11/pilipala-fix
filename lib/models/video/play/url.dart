@@ -142,7 +142,9 @@ class VideoItem {
     startWithSap = json['startWithSap'];
     segmentBase = json['segmentBase'];
     codecid = json['codecid'];
-    quality = VideoQuality.values.firstWhere((i) => i.code == json['id']);
+    // 未知清晰度 id 不能抛 StateError，否则整条播放地址解析失败、详情页一直 loading
+    quality = VideoQualityCode.fromCode(json['id'] ?? 0) ??
+        VideoQuality.high1080;
   }
 }
 
@@ -194,8 +196,9 @@ class AudioItem {
     startWithSap = json['startWithSap'];
     segmentBase = json['segmentBase'];
     codecid = json['codecid'];
-    quality =
-        AudioQuality.values.firstWhere((i) => i.code == json['id']).description;
+    // 未知音质 id 时退化为默认音质描述，避免 StateError
+    quality = AudioQualityCode.fromCode(json['id'] ?? 0)?.description ??
+        AudioQuality.k64.description;
   }
 }
 

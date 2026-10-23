@@ -93,9 +93,21 @@ class VideoCardH extends StatelessWidget {
                         6 /
                         MediaQuery.textScalerOf(context).scale(1.0)) /
                 2;
+            // 原来高度只按封面算（width / aspectRatio），但右侧文字区
+            // 是 4 行（标题2行 + 发布日期 + 作者 + 统计/更多按钮），
+            // 在小屏 360dp 上文字区需要 ~95dp 而封面只有 90dp，
+            // 于是每张卡片都 RenderFlex overflow 8~10px。
+            // 修复：VideoContent 内部已把行高收紧到刚好贴合封面，
+            // 这里再取「封面高度」与「文字区最小高度」的较大值兜底。
+            final double coverHeight = width / StyleString.aspectRatio;
+            final double contentHeight = StyleString.horizontalContentExtent(
+              MediaQuery.textScalerOf(context),
+              showPubdate: showPubdate,
+              showOwner: showOwner,
+            );
             return Container(
               constraints: const BoxConstraints(minHeight: 88),
-              height: width / StyleString.aspectRatio,
+              height: coverHeight > contentHeight ? coverHeight : contentHeight,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,16 +206,22 @@ class VideoContent extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(10, 0, 6, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          // 行高统一收紧（height: 1.15~1.25），让 4 行内容刚好填满
+          // 与封面等高的卡片；Spacer 换成固定 gap，避免大屏把内容拉散。
+          mainAxisSize: MainAxisSize.min,
           children: [
             if (source == 'normal' || source == 'later') ...[
-              Text(
-                videoItem.title as String,
-                textAlign: TextAlign.start,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
+              Flexible(
+                child: Text(
+                  videoItem.title as String,
+                  textAlign: TextAlign.start,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ] else ...[
               RichText(
@@ -226,7 +244,7 @@ class VideoContent extends StatelessWidget {
                 ),
               ),
             ],
-            const Spacer(),
+            const SizedBox(height: 2),
             // if (videoItem.rcmdReason != null &&
             //     videoItem.rcmdReason.content != '')
             //   Container(
@@ -248,7 +266,10 @@ class VideoContent extends StatelessWidget {
               Text(
                 Utils.dateFormat(videoItem.pubdate!),
                 style: TextStyle(
-                    fontSize: 11, color: Theme.of(context).colorScheme.outline),
+                  fontSize: 11,
+                  height: 1.2,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
               ),
             if (showOwner)
               Row(
@@ -258,6 +279,7 @@ class VideoContent extends StatelessWidget {
                     style: TextStyle(
                       fontSize:
                           Theme.of(context).textTheme.labelMedium!.fontSize,
+                      height: 1.2,
                       color: Theme.of(context).colorScheme.outline,
                     ),
                   ),
@@ -274,8 +296,9 @@ class VideoContent extends StatelessWidget {
                 const Spacer(),
                 if (source == 'normal')
                   SizedBox(
-                    width: 24,
-                    height: 24,
+                    // 从 24 收到 20，与统计文字行高对齐，省下 4dp 给标题
+                    width: 20,
+                    height: 20,
                     child: IconButton(
                       padding: EdgeInsets.zero,
                       onPressed: () {

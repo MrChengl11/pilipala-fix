@@ -554,7 +554,13 @@ class MemberHttp {
           'data': MemberSeasonsDataModel.fromJson(res.data['data'])
         };
       } catch (err) {
-        print(err);
+        print('getSeriesDetail parse error: $err');
+        // catch 后必须返回，否则调用方拿到 null 当 Map 用
+        return {
+          'status': false,
+          'data': [],
+          'msg': '番剧列表解析失败',
+        };
       }
     } else {
       return {
@@ -566,22 +572,38 @@ class MemberHttp {
   }
 
   static Future getWWebid({required int mid}) async {
-    var res = await Request().get('https://space.bilibili.com/$mid/article');
-    String? headContent = parse(res.data).head?.outerHtml;
-    final regex = RegExp(
-        r'<script id="__RENDER_DATA__" type="application/json">(.*?)</script>');
-    if (headContent != null) {
-      final match = regex.firstMatch(headContent);
-      if (match != null && match.groupCount >= 1) {
-        final content = match.group(1);
-        String decodedString = Uri.decodeComponent(content!);
-        Map<String, dynamic> map = jsonDecode(decodedString);
-        return {'status': true, 'data': map['access_id']};
-      } else {
-        return {'status': false, 'data': '请检查登录状态'};
+    try {
+      var res = await Request().get('https://space.bilibili.com/$mid/article');
+      final String? headContent = parse(res.data).head?.outerHtml;
+      final regex = RegExp(
+          r'<script id="__RENDER_DATA__" type="application/json">(.*?)</script>');
+      if (headContent == null) {
+        return {
+          'status': false,
+          'data': '',
+          'msg': '请检查登录状态',
+        };
       }
+      final match = regex.firstMatch(headContent);
+      final String? content = match?.group(1);
+      if (content == null) {
+        return {
+          'status': false,
+          'data': '',
+          'msg': '请检查登录状态',
+        };
+      }
+      final String decodedString = Uri.decodeComponent(content);
+      final Map<String, dynamic> map = jsonDecode(decodedString);
+      return {'status': true, 'data': map['access_id']};
+    } catch (err) {
+      print('getWWebid error: $err');
+      return {
+        'status': false,
+        'data': '',
+        'msg': '获取专栏信息失败',
+      };
     }
-    return {'status': false, 'data': '请检查登录状态'};
   }
 
   // 获取用户专栏

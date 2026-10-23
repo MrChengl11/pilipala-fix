@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:floating/floating.dart';
@@ -33,6 +34,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
   final ScrollController _scrollController = ScrollController();
   late AnimationController fabAnimationCtr;
   bool _shouldAutoScroll = true;
+  StreamSubscription? _msgListSub;
   final int roomId = int.parse(Get.parameters['roomid']!);
 
   @override
@@ -50,6 +52,12 @@ class _LiveRoomPageState extends State<LiveRoomPage>
       duration: const Duration(milliseconds: 300),
       value: 0.0,
     );
+    // 只订阅一次，避免 didChangeDependencies 多次触发造成监听泄漏
+    _msgListSub = _liveRoomController.messageList.listen((_) {
+      if (_shouldAutoScroll) {
+        _scrollToBottom();
+      }
+    });
   }
 
   Future<void> videoSourceInit() async {
@@ -69,17 +77,6 @@ class _LiveRoomPageState extends State<LiveRoomPage>
     }
   }
 
-  // 监听messageList的变化，自动滚动到底部
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _liveRoomController.messageList.listen((_) {
-      if (_shouldAutoScroll) {
-        _scrollToBottom();
-      }
-    });
-  }
-
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController
@@ -97,12 +94,15 @@ class _LiveRoomPageState extends State<LiveRoomPage>
 
   @override
   void dispose() {
+    _msgListSub?.cancel();
     plPlayerController.dispose();
     if (floating != null) {
       floating!.dispose();
     }
     _scrollController.dispose();
     fabAnimationCtr.dispose();
+    // 页面退出时释放控制器（触发 onClose：关闭弹幕 socket、释放输入框等）
+    Get.delete<LiveRoomController>();
     super.dispose();
   }
 

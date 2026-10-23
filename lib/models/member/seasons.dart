@@ -86,7 +86,7 @@ class MemberArchiveItem {
     pic = json['pic'];
     cover = json['pic'];
     pubdate = json['pubdate'];
-    view = json['stat']['view'];
+    view = json['stat'] == null ? null : json['stat']['view'];
     title = json['title'];
   }
 }

@@ -44,6 +44,7 @@ class _VideoReplyNewDialogState extends State<VideoReplyNewDialog>
   RxBool isForward = false.obs;
   RxBool showForward = false.obs;
   RxString message = ''.obs;
+  RxBool isSubmitting = false.obs; // 发送中，用于防重复提交
 
   @override
   void initState() {
@@ -80,6 +81,19 @@ class _VideoReplyNewDialogState extends State<VideoReplyNewDialog>
   }
 
   Future submitReplyAdd() async {
+    // 发送中禁止重复点击，避免同一条评论被提交多次
+    if (isSubmitting.value) {
+      return;
+    }
+    isSubmitting.value = true;
+    try {
+      await _submitReplyAdd();
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future _submitReplyAdd() async {
     feedBack();
     // String message = _replyContentController.text;
     var result = await VideoHttp.replyAdd(
@@ -282,7 +296,9 @@ class _VideoReplyNewDialogState extends State<VideoReplyNewDialog>
                   height: 36,
                   child: Obx(
                     () => FilledButton(
-                      onPressed: message.isNotEmpty ? submitReplyAdd : null,
+                      onPressed: message.isNotEmpty && !isSubmitting.value
+                          ? submitReplyAdd
+                          : null,
                       child: const Text('发送'),
                     ),
                   ),

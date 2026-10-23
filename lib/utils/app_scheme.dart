@@ -169,20 +169,34 @@ class PiliSchame {
         }
       }
       if (path.startsWith('/bangumi')) {
-        if (lastPathSegment.contains('ss')) {
-          RoutePush.bangumiPush(Utils.matchNum(lastPathSegment).first, null);
+        final List<int> ids = Utils.matchNum(lastPathSegment);
+        if (ids.isEmpty) {
+          SmartDialog.showToast('番剧匹配失败');
+          return;
         }
-        if (lastPathSegment.contains('ep')) {
-          RoutePush.bangumiPush(null, Utils.matchNum(lastPathSegment).first);
+        if (lastPathSegment.contains('ss')) {
+          RoutePush.bangumiPush(ids.first, null);
+        } else if (lastPathSegment.contains('ep')) {
+          RoutePush.bangumiPush(null, ids.first);
         }
       } else if (path.startsWith('/BV')) {
         final String bvid = path.split('?').first.split('/').last;
         _videoPush(null, bvid);
       } else if (path.startsWith('/av')) {
-        _videoPush(Utils.matchNum(path.split('?').first).first, null);
+        // 无数字时 .first 会抛 StateError
+        final List<int> avIds = Utils.matchNum(path.split('?').first);
+        if (avIds.isEmpty) {
+          SmartDialog.showToast('投稿匹配失败');
+          return;
+        }
+        _videoPush(avIds.first, null);
       }
     } else if (host.contains('live')) {
-      int roomId = int.parse(path!.split('/').last);
+      final int? roomId = int.tryParse(path!.split('/').last);
+      if (roomId == null) {
+        SmartDialog.showToast('直播间匹配失败');
+        return;
+      }
       Get.toNamed(
         '/liveRoom?roomid=$roomId',
         arguments: {'liveItem': null, 'heroTag': roomId.toString()},

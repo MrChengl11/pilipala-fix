@@ -20,11 +20,20 @@ class SearchResultController extends GetxController {
   }
 
   Future querySearchCount() async {
-    var result = await SearchHttp.searchCount(keyword: keyword!);
+    final String? kw = keyword;
+    if (kw == null || kw.isEmpty) {
+      return {'status': false, 'msg': '关键词为空'};
+    }
+    var result = await SearchHttp.searchCount(keyword: kw);
     if (result['status']) {
+      final topTList = result['data']?.topTList;
       for (var i in searchTabs) {
-        final count = result['data'].topTList[i['id']];
-        i['count'] = count > 99 ? '99+' : count.toString();
+        final dynamic raw = topTList?[i['id']];
+        if (raw is int && raw > 99) {
+          i['count'] = '99+';
+        } else {
+          i['count'] = raw is int ? raw.toString() : '0';
+        }
       }
       searchTabs.refresh();
     }

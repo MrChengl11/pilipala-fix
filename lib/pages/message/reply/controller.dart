@@ -7,12 +7,16 @@ class MessageReplyController extends GetxController {
   RxList<MessageReplyItem> replyItems = <MessageReplyItem>[].obs;
 
   Future queryMessageReply({String type = 'init'}) async {
-    if (cursor != null && cursor!.isEnd == true) {
+    if (type == 'onLoad' && cursor != null && cursor!.isEnd == true) {
       return {};
     }
+    if (type == 'init') {
+      cursor = null;
+      replyItems.clear();
+    }
     var params = {
-      if (type == 'onLoad') 'id': cursor!.id,
-      if (type == 'onLoad') 'replyTime': cursor!.time,
+      if (type == 'onLoad' && cursor != null) 'id': cursor!.id,
+      if (type == 'onLoad' && cursor != null) 'replyTime': cursor!.time,
     };
     var res = await MsgHttp.messageReply(
         id: params['id'], replyTime: params['replyTime']);

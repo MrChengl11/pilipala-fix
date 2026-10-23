@@ -4,10 +4,12 @@ import 'storage.dart';
 
 class RecommendFilter {
   // static late int filterUnfollowedRatio;
-  static late int minDurationForRcmd;
-  static late int minLikeRatioForRecommend;
-  static late bool exemptFilterForFollowed;
-  static late bool applyFilterToRelatedVideos;
+  // 默认值与 update() 中的 defaultValue 保持一致；若请求早于 RecommendFilter()
+  // 构造调用，也不能抛 LateInitializationError
+  static int minDurationForRcmd = 0;
+  static int minLikeRatioForRecommend = 0;
+  static bool exemptFilterForFollowed = true;
+  static bool applyFilterToRelatedVideos = true;
   RecommendFilter() {
     update();
   }

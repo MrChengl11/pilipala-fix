@@ -82,20 +82,30 @@ class ReplyItemModel {
     parentStr = json['parent_str'];
     like = json['like'];
     action = json['action'];
-    member = ReplyMember.fromJson(json['member']);
-    content = ReplyContent.fromJson(json['content']);
+    member = json['member'] != null
+        ? ReplyMember.fromJson(json['member'])
+        : null;
+    content = json['content'] != null
+        ? ReplyContent.fromJson(json['content'])
+        : null;
     replies = json['replies'] != null
         ? json['replies']
             .map((item) => ReplyItemModel.fromJson(item, upperMid))
             .toList()
         : [];
     assist = json['assist'];
-    upAction = UpAction.fromJson(json['up_action']);
+    upAction = json['up_action'] != null
+        ? UpAction.fromJson(json['up_action'])
+        : null;
     invisible = json['invisible'];
     replyControl = json['reply_control'] == null
         ? null
         : ReplyControl.fromJson(json['reply_control']);
-    isUp = upperMid.toString() == json['member']['mid'];
+    // 原写法是 String == int 恒为 false，导致 UP 主评论永远不显示「UP」标
+    isUp = json['member'] != null &&
+        upperMid != null &&
+        json['member']['mid'] != null &&
+        json['member']['mid'].toString() == upperMid.toString();
     isTop = isTopStatus;
     cardLabel = json['card_label'] != null
         ? json['card_label'].map((e) => e['text_content']).toList()
@@ -140,16 +150,12 @@ class ReplyControl {
     upReply = json['up_reply'] ?? false;
     isUpTop = json['is_up_top'] ?? false;
     upLike = json['up_like'] ?? false;
-    if (json['sub_reply_entry_text'] != null) {
-      final RegExp regex = RegExp(r"\d+");
-      final RegExpMatch match = regex.firstMatch(
-          json['sub_reply_entry_text'] == null
-              ? ''
-              : json['sub_reply_entry_text']!)!;
-      isShow = int.parse(match.group(0)!) >= 3;
-    } else {
-      isShow = false;
-    }
+    // 文案可能不含数字（如「点击查看」），原来的 .firstMatch(...)! 会直接抛异常
+    final RegExp regex = RegExp(r"\d+");
+    final RegExpMatch? match =
+        regex.firstMatch('${json['sub_reply_entry_text'] ?? ''}');
+    final int subReplyCount = int.tryParse(match?.group(0) ?? '') ?? 0;
+    isShow = subReplyCount >= 3;
 
     entryText = json['sub_reply_entry_text'];
     titleText = json['sub_reply_title_text'];

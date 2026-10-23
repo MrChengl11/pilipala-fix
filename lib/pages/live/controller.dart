@@ -27,9 +27,9 @@ class LiveController extends GetxController {
 
   // 获取推荐
   Future queryLiveList(type) async {
-    // if (type == 'init') {
-    //   _currentPage = 1;
-    // }
+    if (type == 'init') {
+      _currentPage = 1;
+    }
     var res = await LiveHttp.liveList(
       pn: _currentPage,
     );
@@ -46,13 +46,13 @@ class LiveController extends GetxController {
 
   // 下拉刷新
   Future onRefresh() async {
-    queryLiveList('init');
-    fetchLiveFollowing();
+    await queryLiveList('init');
+    await fetchLiveFollowing();
   }
 
   // 上拉加载
   Future onLoad() async {
-    queryLiveList('onLoad');
+    return queryLiveList('onLoad');
   }
 
   // 返回顶部并刷新

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:pilipala/common/widgets/http_error.dart';
 import 'package:pilipala/common/widgets/network_img_layer.dart';
 import 'package:pilipala/utils/utils.dart';
 
@@ -7,6 +8,16 @@ Widget searchUserPanel(BuildContext context, ctr, list) {
   TextStyle style = TextStyle(
       fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
       color: Theme.of(context).colorScheme.outline);
+
+  // 搜索结果为空时原来的 ListView 什么都不渲染，整页纯白无任何反馈。
+  if (list == null || list!.isEmpty) {
+    return CustomScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      slivers: [
+        HttpError(errMsg: '没有数据', isShowBtn: false, fn: () => {}),
+      ],
+    );
+  }
 
   return ListView.builder(
     controller: ctr!.scrollController,

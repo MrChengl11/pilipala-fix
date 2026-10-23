@@ -271,7 +271,9 @@ class _StyleSettingState extends State<StyleSetting> {
             onTap: () => settingController.seteDefaultHomePage(context),
             title: Text('默认启动页', style: titleStyle),
             subtitle: Obx(() => Text(
-                '当前启动页：${defaultNavigationBars.firstWhere((e) => e['id'] == settingController.defaultHomePage.value)['label']}',
+                // 保存的启动页 id 可能已不存在（如版本升级删掉了某个页面），
+                // 缺少 orElse 会让「外观设置」页直接崩溃
+                '当前启动页：${defaultNavigationBars.firstWhere((e) => e['id'] == settingController.defaultHomePage.value, orElse: () => defaultNavigationBars.first)['label']}',
                 style: subTitleStyle)),
           ),
           ListTile(

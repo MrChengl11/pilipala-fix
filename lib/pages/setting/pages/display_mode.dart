@@ -47,9 +47,15 @@ class _SetDiaplayModeState extends State<SetDiaplayMode> {
     } on PlatformException catch (e) {
       print(e);
     }
+    if (modes.isEmpty) return;
     var res = await getDisplayModeType(modes);
 
-    preferred = modes.toList().firstWhere((el) => el == res);
+    // 缺少 orElse 时，若设备不报告 auto/当前帧率，会抛
+    // StateError: No element 并让设置页崩溃
+    preferred = modes.toList().firstWhere(
+          (el) => el == res,
+          orElse: () => modes.first,
+        );
     FlutterDisplayMode.setPreferredMode(preferred!);
   }
 
@@ -57,7 +63,10 @@ class _SetDiaplayModeState extends State<SetDiaplayMode> {
     var value = setting.get(SettingBoxKey.displayMode);
     DisplayMode f = DisplayMode.auto;
     if (value != null) {
-      f = modes.firstWhere((e) => e.toString() == value);
+      f = modes.firstWhere(
+        (e) => e.toString() == value,
+        orElse: () => DisplayMode.auto,
+      );
     }
     return f;
   }

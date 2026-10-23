@@ -68,7 +68,7 @@ class MsgHttp {
     } else {
       return {
         'status': false,
-        'date': [],
+        'data': [],
         'msg': res.data['message'],
       };
     }
@@ -98,7 +98,7 @@ class MsgHttp {
     } else {
       return {
         'status': false,
-        'date': [],
+        'data': [],
         'msg': res.data['message'],
       };
     }
@@ -126,7 +126,7 @@ class MsgHttp {
         'data': res.data['data'],
       };
     } else {
-      return {'status': false, 'date': [], 'msg': res.data['message']};
+      return {'status': false, 'data': [], 'msg': res.data['message']};
     }
   }
 
@@ -164,7 +164,7 @@ class MsgHttp {
         'data': res.data['data'],
       };
     } else {
-      return {'status': false, 'date': [], 'msg': res.data['message']};
+      return {'status': false, 'data': [], 'msg': res.data['message']};
     }
   }
 
@@ -221,7 +221,7 @@ class MsgHttp {
         'data': res.data['data'],
       };
     } else {
-      return {'status': false, 'date': [], 'msg': res.data['message']};
+      return {'status': false, 'data': [], 'msg': res.data['message']};
     }
   }
 
@@ -233,7 +233,7 @@ class MsgHttp {
         'data': res.data['data'],
       };
     } else {
-      return {'status': false, 'date': [], 'msg': res.data['message']};
+      return {'status': false, 'data': [], 'msg': res.data['message']};
     }
   }
 
@@ -254,10 +254,10 @@ class MsgHttp {
           'data': MessageReplyModel.fromJson(res.data['data']),
         };
       } catch (err) {
-        return {'status': false, 'date': [], 'msg': err.toString()};
+        return {'status': false, 'data': [], 'msg': err.toString()};
       }
     } else {
-      return {'status': false, 'date': [], 'msg': res.data['message']};
+      return {'status': false, 'data': [], 'msg': res.data['message']};
     }
   }
 
@@ -278,10 +278,10 @@ class MsgHttp {
           'data': MessageLikeModel.fromJson(res.data['data']),
         };
       } catch (err) {
-        return {'status': false, 'date': [], 'msg': err.toString()};
+        return {'status': false, 'data': [], 'msg': err.toString()};
       }
     } else {
-      return {'status': false, 'date': [], 'msg': res.data['message']};
+      return {'status': false, 'data': [], 'msg': res.data['message']};
     }
   }
 
@@ -301,10 +301,10 @@ class MsgHttp {
               .toList(),
         };
       } catch (err) {
-        return {'status': false, 'date': [], 'msg': err.toString()};
+        return {'status': false, 'data': [], 'msg': err.toString()};
       }
     } else {
-      return {'status': false, 'date': [], 'msg': res.data['message']};
+      return {'status': false, 'data': [], 'msg': res.data['message']};
     }
   }
 
@@ -343,10 +343,10 @@ class MsgHttp {
               .toList(),
         };
       } catch (err) {
-        return {'status': false, 'date': [], 'msg': err.toString()};
+        return {'status': false, 'data': [], 'msg': err.toString()};
       }
     } else {
-      return {'status': false, 'date': [], 'msg': res.data['message']};
+      return {'status': false, 'data': [], 'msg': res.data['message']};
     }
   }
 }

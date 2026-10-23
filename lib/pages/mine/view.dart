@@ -348,7 +348,9 @@ class ActionItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
+      // 原实现写死 onTap: () {}，导致传入的 onTap 回调被完全忽略，
+      // 这一排快捷入口全部是「点了没反应」的死按钮。
+      onTap: onTap == null ? null : () => onTap!(),
       borderRadius: StyleString.mdRadius,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

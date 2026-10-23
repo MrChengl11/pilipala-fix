@@ -62,12 +62,12 @@ class SSearchController extends GetxController {
 
   // 搜索
   void submit() {
-    // ignore: unrelated_type_equality_checks
-    if (searchKeyWord == '') {
+    final String keyword = searchKeyWord.value.trim();
+    if (keyword.isEmpty) {
       return;
     }
-    List arr = historyCacheList.where((e) => e != searchKeyWord.value).toList();
-    arr.insert(0, searchKeyWord.value);
+    List arr = historyCacheList.where((e) => e != keyword).toList();
+    arr.insert(0, keyword);
     historyCacheList = arr;
 
     historyList.value = historyCacheList;
@@ -75,7 +75,7 @@ class SSearchController extends GetxController {
     historyList.refresh();
     histiryWord.put('cacheList', historyCacheList);
     searchFocusNode.unfocus();
-    Get.toNamed('/searchResult', parameters: {'keyword': searchKeyWord.value});
+    Get.toNamed('/searchResult', parameters: {'keyword': keyword});
   }
 
   // 获取热搜关键词
@@ -114,7 +114,8 @@ class SSearchController extends GetxController {
   }
 
   onLongSelect(word) {
-    int index = historyList.indexOf(word);
+    final int index = historyList.indexOf(word);
+    if (index < 0) return;
     historyList.removeAt(index);
     historyList.refresh();
     histiryWord.put('cacheList', historyList);

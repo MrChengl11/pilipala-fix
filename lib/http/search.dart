@@ -89,7 +89,7 @@ class SearchHttp {
     };
     var res = await Request().get(Api.searchByType, data: reqData);
     if (res.data['code'] == 0) {
-      if (res.data['data']['numPages'] == 0) {
+      if (res.data['data'] == null || res.data['data']['numPages'] == 0) {
         // 我想返回数据，使得可以通过data.list 取值，结果为[]
         return {'status': true, 'data': Data()};
       }
@@ -97,8 +97,8 @@ class SearchHttp {
       try {
         switch (searchType) {
           case SearchType.video:
-            List<int> blackMidsList =
-                setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]);
+            final List<int> blackMidsList = List<int>.from(
+                setting.get(SettingBoxKey.blackMidsList, defaultValue: [-1]));
             for (var i in res.data['data']['result']) {
               // 屏蔽推广和拉黑用户
               i['available'] = !blackMidsList.contains(i['mid']);
@@ -123,7 +123,13 @@ class SearchHttp {
           'data': data,
         };
       } catch (err) {
-        print(err);
+        print('searchByType parse error: $err');
+        // catch 里必须返回，否则调用方拿到 null 会再崩一次
+        return {
+          'status': false,
+          'data': [],
+          'msg': '搜索失败，请稍后重试',
+        };
       }
     } else {
       return {
@@ -182,12 +188,21 @@ class SearchHttp {
     } else if (bvid != null) {
       data['bvid'] = bvid;
     }
-    final dynamic res =
-        await Request().get(Api.ab2c, data: <String, dynamic>{...data});
-    return {
-      'cid': res.data['data'].first['cid'],
-      'pic': res.data['data'].first['first_frame'],
-    };
+    try {
+      final dynamic res =
+          await Request().get(Api.ab2c, data: <String, dynamic>{...data});
+      // 失效稿件/风控时 data 为 null 或空列表，直接 .first 会抛 NoSuchElementException
+      if (res.data['code'] == 0 &&
+          res.data['data'] is List &&
+          (res.data['data'] as List).isNotEmpty) {
+        final dynamic first = res.data['data'].first;
+        return {'cid': first['cid'], 'pic': first['first_frame']};
+      }
+      return {'cid': null, 'pic': null};
+    } catch (err) {
+      print('ab2cWithPic error: $err');
+      return {'cid': null, 'pic': null};
+    }
   }
 
   static Future<Map<String, dynamic>> searchCount(

@@ -93,7 +93,7 @@ class PlPlayerController {
   Rx<bool> _isSliderMoving = false.obs;
   PlaylistMode _looping = PlaylistMode.none;
   bool _autoPlay = false;
-  final bool _listenersInitialized = false;
+  bool _listenersInitialized = false;
 
   // 记录历史记录
   String _bvid = '';
@@ -373,10 +373,9 @@ class PlPlayerController {
       // 数据加载完成
       dataStatus.status.value = DataStatus.loaded;
 
-      // listen the video player events
-      if (!_listenersInitialized) {
-        startListeners();
-      }
+      // 播放器实例已重建：取消旧监听并重新绑定，保证只保留一份且绑定到新控制器
+      removeListeners();
+      startListeners();
       await _initializePlayer(duration: _duration.value);
       bool autoEnterFullcreen =
           setting.get(SettingBoxKey.enableAutoEnter, defaultValue: false);
@@ -535,6 +534,10 @@ class PlPlayerController {
 
   /// 播放事件监听
   void startListeners() {
+    if (_listenersInitialized) {
+      return;
+    }
+    _listenersInitialized = true;
     subscriptions.addAll(
       [
         videoPlayerController!.stream.playing.listen((event) {
@@ -621,6 +624,8 @@ class PlPlayerController {
     for (final s in subscriptions) {
       s.cancel();
     }
+    subscriptions.clear();
+    _listenersInitialized = false;
   }
 
   /// 跳转至指定位置
@@ -633,9 +638,7 @@ class PlPlayerController {
       updatePositionSecond();
       _heartDuration = position.inSeconds;
       if (duration.value.inSeconds != 0) {
-        if (type != 'slider') {
-          await _videoPlayerController?.stream.buffer.first;
-        }
+        // 暂停/缓冲稳定时 stream.buffer 不会再发事件，等待它会永久挂起导致 seek 不生效
         await _videoPlayerController?.seek(position);
       } else {
         _timerForSeek?.cancel();
@@ -649,7 +652,6 @@ class PlPlayerController {
   Timer? _startSeekTimer(Duration position) {
     return Timer.periodic(const Duration(milliseconds: 200), (Timer t) async {
       if (duration.value.inSeconds != 0) {
-        await _videoPlayerController!.stream.buffer.first;
         await _videoPlayerController?.seek(position);
         t.cancel();
         _timerForSeek = null;
@@ -664,8 +666,9 @@ class PlPlayerController {
     try {
       DanmakuOption currentOption = danmakuController!.option;
       defaultDuration ??= currentOption.duration;
-      DanmakuOption updatedOption = currentOption.copyWith(
-          duration: (defaultDuration! / speed) * playbackSpeed);
+      // 此处 _playbackSpeed 仍是旧值，只能用本次传入的 speed 计算，否则反复切换倍速会累积误差
+      DanmakuOption updatedOption =
+          currentOption.copyWith(duration: defaultDuration! / speed);
       danmakuController!.updateOption(updatedOption);
     } catch (_) {}
     // fix 长按倍速后放开不恢复

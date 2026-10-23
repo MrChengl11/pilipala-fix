@@ -7,12 +7,16 @@ class MessageLikeController extends GetxController {
   RxList<MessageLikeItem> likeItems = <MessageLikeItem>[].obs;
 
   Future queryMessageLike({String type = 'init'}) async {
-    if (cursor != null && cursor!.isEnd == true) {
+    if (type == 'onLoad' && cursor != null && cursor!.isEnd == true) {
       return {};
     }
+    if (type == 'init') {
+      cursor = null;
+      likeItems.clear();
+    }
     var params = {
-      if (type == 'onLoad') 'id': cursor!.id,
-      if (type == 'onLoad') 'likeTime': cursor!.time,
+      if (type == 'onLoad' && cursor != null) 'id': cursor!.id,
+      if (type == 'onLoad' && cursor != null) 'likeTime': cursor!.time,
     };
     var res = await MsgHttp.messageLike(
         id: params['id'], likeTime: params['likeTime']);

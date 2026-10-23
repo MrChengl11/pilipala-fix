@@ -93,8 +93,11 @@ class Request {
 
     final List<Cookie> cookies = await cookieManager.cookieJar
         .loadForRequest(Uri.parse(HttpString.baseUrl));
-    buvid = cookies.firstWhere((cookie) => cookie.name == 'buvid3').value;
-    if (buvid == null) {
+    // 首次安装时 jar 里没有 buvid3，firstWhere 会抛 StateError（无 orElse）
+    final Iterable<Cookie> buvidCookies =
+        cookies.where((cookie) => cookie.name == 'buvid3');
+    buvid = buvidCookies.isNotEmpty ? buvidCookies.first.value : null;
+    if (buvid == null || buvid!.isEmpty) {
       try {
         var result = await Request().get(
           "${HttpString.apiBaseUrl}/x/frontend/finger/spi",
@@ -115,6 +118,10 @@ class Request {
       dio.options.headers['x-bili-mid'] = userInfo.mid.toString();
       dio.options.headers['x-bili-aurora-eid'] =
           IdUtils.genAuroraEid(userInfo.mid);
+    } else {
+      // 退出登录/切换账号后必须清掉上一个账号的标识
+      dio.options.headers.remove('x-bili-mid');
+      dio.options.headers.remove('x-bili-aurora-eid');
     }
     dio.options.headers['env'] = 'prod';
     dio.options.headers['app-key'] = 'android64';

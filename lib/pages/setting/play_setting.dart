@@ -280,7 +280,8 @@ class _PlaySettingState extends State<PlaySetting> {
             dense: false,
             title: Text('音频输出方式', style: titleStyle),
             subtitle: Text(
-              '当前输出方式 ${aoOutputList.firstWhere((element) => element['value'] == defaultAoOutput)['title']}',
+              // 设备可能不报告已保存的音频输出方式，缺少 orElse 会抛 StateError
+              '当前输出方式 ${aoOutputList.firstWhere((element) => element['value'] == defaultAoOutput, orElse: () => aoOutputList.first)['title']}',
               style: subTitleStyle,
             ),
             onTap: () async {

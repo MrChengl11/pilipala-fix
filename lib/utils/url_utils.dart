@@ -43,7 +43,12 @@ class UrlUtils {
     if (matchRes.containsKey('BV')) {
       final String bv = matchRes['BV'];
       final Map res = await SearchHttp.ab2cWithPic(bvid: bv);
-      final int cid = res['cid'];
+      final dynamic rawCid = res['cid'];
+      if (rawCid is! int) {
+        Get.snackbar('提示', '视频信息获取失败，请稍后重试');
+        return;
+      }
+      final int cid = rawCid;
       final String? pic = res['pic'];
       final String heroTag = Utils.makeHeroTag(bv);
       await Get.toNamed(

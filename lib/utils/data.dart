@@ -14,7 +14,14 @@ class Data {
     if (userInfoCache.get('userInfoCache') == null) {
       return;
     }
-    var res = await UserHttp.historyStatus();
-    localCache.put(LocalCacheKey.historyPause, res.data['data']);
+    try {
+      var res = await UserHttp.historyStatus();
+      // 接口失败时 data 为 null，直接写入会把「暂停记录历史」开关覆盖成 null
+      if (res.data['code'] == 0 && res.data['data'] != null) {
+        localCache.put(LocalCacheKey.historyPause, res.data['data']);
+      }
+    } catch (err) {
+      print('historyStatus error: $err');
+    }
   }
 }

@@ -2,11 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/constants.dart';
+import 'package:pilipala/common/widgets/http_error.dart';
 import 'package:pilipala/common/widgets/network_img_layer.dart';
 import 'package:pilipala/utils/image_save.dart';
 import 'package:pilipala/utils/utils.dart';
 
 Widget searchLivePanel(BuildContext context, ctr, list) {
+  // 搜索结果为空时原来的 GridView 什么都不渲染，整页纯白无任何反馈。
+  if (list == null || list!.isEmpty) {
+    return CustomScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      slivers: [
+        HttpError(errMsg: '没有数据', isShowBtn: false, fn: () => {}),
+      ],
+    );
+  }
   return Padding(
     padding: const EdgeInsets.only(
         left: StyleString.safeSpace, right: StyleString.safeSpace),
@@ -17,9 +27,16 @@ Widget searchLivePanel(BuildContext context, ctr, list) {
           crossAxisCount: 2,
           crossAxisSpacing: StyleString.cardSpace + 2,
           mainAxisSpacing: StyleString.cardSpace + 3,
-          mainAxisExtent:
-              MediaQuery.sizeOf(context).width / 2 / StyleString.aspectRatio +
-                  MediaQuery.textScalerOf(context).scale(66.0)),
+          mainAxisExtent: ((MediaQuery.sizeOf(context).width -
+                          StyleString.safeSpace * 2 -
+                          (StyleString.cardSpace + 2)) /
+                      2) /
+                  StyleString.aspectRatio +
+              StyleString.videoContentExtent(
+                2,
+                MediaQuery.textScalerOf(context),
+                hasStatLine: false,
+              )),
       itemCount: list.length,
       itemBuilder: (context, index) {
         return LiveItem(liveItem: list![index]);

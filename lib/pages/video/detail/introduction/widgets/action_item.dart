@@ -24,13 +24,19 @@ class ActionItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => {
-        feedBack(),
-        onTap!(),
-      },
-      onLongPress: () => {
-        if (onLongPress != null) {onLongPress!()}
-      },
+      // onTap 是可空的，原来无条件 onTap!() 会在未传回调时抛
+      // Null check operator used on a null value。
+      onTap: onTap == null
+          ? null
+          : () {
+              feedBack();
+              onTap!();
+            },
+      onLongPress: onLongPress == null
+          ? null
+          : () {
+              onLongPress!();
+            },
       borderRadius: StyleString.mdRadius,
       child: SizedBox(
         width: (Get.size.width - 24) / 5,

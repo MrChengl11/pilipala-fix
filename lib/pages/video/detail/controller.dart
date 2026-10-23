@@ -179,9 +179,7 @@ class VideoDetailController extends GetxController
       watchLaterTitle.value = argMap['favTitle'];
       queryFavVideoList();
     }
-    tabCtr.addListener(() {
-      onTabChanged();
-    });
+    tabCtr.addListener(onTabChanged);
   }
 
   showReplyReplyPanel(oid, fRpid, firstFloor, currentReply, loadMore) {
@@ -208,7 +206,7 @@ class VideoDetailController extends GetxController
 
   /// 更新画质、音质
   /// TODO 继续进度播放
-  updatePlayer() {
+  Future updatePlayer() async {
     defaultST = plPlayerController.position.value;
     plPlayerController.removeListeners();
     plPlayerController.isBuffering.value = false;
@@ -218,6 +216,13 @@ class VideoDetailController extends GetxController
       /// 根据currentVideoQa和currentDecodeFormats 重新设置videoUrl
       List<VideoItem> videoList =
           data.dash!.video!.where((i) => i.id == currentVideoQa.code).toList();
+      if (videoList.isEmpty) {
+        // 当前清晰度不在本次返回的 dash 列表中（会员/接口未返回该清晰度）：
+        // 恢复监听后提示并返回，避免下方 firstWhere 抛 StateError 让播放器卡在旧状态
+        plPlayerController.startListeners();
+        SmartDialog.showToast('该清晰度暂不可用，请选择其他清晰度');
+        return;
+      }
       try {
         firstVideo = videoList.firstWhere(
             (i) => i.codecs!.startsWith(currentDecodeFormats?.code));
@@ -232,7 +237,8 @@ class VideoDetailController extends GetxController
               SettingBoxKey.defaultDecode,
               defaultValue: VideoDecodeFormats.values.last.code))!;
           firstVideo = videoList.firstWhere(
-              (i) => i.codecs!.startsWith(currentDecodeFormats?.code));
+              (i) => i.codecs!.startsWith(currentDecodeFormats?.code),
+              orElse: () => videoList.first);
         }
       }
       videoUrl = firstVideo.baseUrl!;
@@ -249,7 +255,13 @@ class VideoDetailController extends GetxController
 
     if (archiveSourceType.value == 'durl') {
       cacheVideoQa = VideoQualityCode.toCode(currentVideoQa);
-      queryVideoUrl();
+      // queryVideoUrl 在自动播放时内部会自行初始化播放器，必须 await 它，
+      // 否则紧接着的 playerInit 会二次 setDataSource，互相打断（进度重置/封面闪烁）
+      await queryVideoUrl();
+      if (!autoPlay.value) {
+        playerInit();
+      }
+      return;
     }
     playerInit();
   }
@@ -489,9 +501,11 @@ class VideoDetailController extends GetxController
   void showShootDanmakuSheet() {
     final TextEditingController textController = TextEditingController();
     bool isSending = false; // 追踪是否正在发送
+    BuildContext? dialogContext; // 弹窗内层 context，用于判断弹窗是否已被用户关闭
     showDialog(
       context: Get.context!,
       builder: (BuildContext context) {
+        dialogContext = context;
         // TODO: 支持更多类型和颜色的弹幕
         return AlertDialog(
           title: const Text('发送弹幕'),
@@ -523,9 +537,11 @@ class VideoDetailController extends GetxController
                           SmartDialog.showToast('弹幕内容不能超过100个字符');
                           return;
                         }
-                        setState(() {
-                          isSending = true; // 开始发送，更新状态
-                        });
+                        if (dialogContext?.mounted ?? false) {
+                          setState(() {
+                            isSending = true; // 开始发送，更新状态
+                          });
+                        }
                         //修改按钮文字
                         // SmartDialog.showToast('弹幕发送中,\n$msg');
                         final dynamic res = await DanmakaHttp.shootDanmaku(
@@ -536,6 +552,11 @@ class VideoDetailController extends GetxController
                               plPlayerController.position.value.inMilliseconds,
                           type: 1,
                         );
+                        // 弹窗已被用户关闭（点空白/取消）：不再 setState，也不再继续提示或关闭页面，
+                        // 否则会抛 setState() after dispose()，且 Get.back() 会把视频详情页一起 pop 掉
+                        if (!(dialogContext?.mounted ?? false)) {
+                          return;
+                        }
                         setState(() {
                           isSending = false; // 发送结束，更新状态
                         });
@@ -564,7 +585,10 @@ class VideoDetailController extends GetxController
           ],
         );
       },
-    );
+    ).then((_) {
+      // 弹窗关闭后释放输入框控制器
+      textController.dispose();
+    });
   }
 
   void updateCover(String? pic) {
@@ -676,8 +700,7 @@ class VideoDetailController extends GetxController
   void onClose() {
     super.onClose();
     plPlayerController.dispose();
-    tabCtr.removeListener(() {
-      onTabChanged();
-    });
+    tabCtr.removeListener(onTabChanged);
+    tabCtr.dispose();
   }
 }

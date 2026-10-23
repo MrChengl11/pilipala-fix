@@ -30,11 +30,12 @@ class DynamicsHttp {
           'data': DynamicsDataModel.fromJson(res.data['data']),
         };
       } catch (err) {
-        print(err);
+        // 不要把内部异常文本直接当成提示语展示给用户
+        print('followDynamic parse error: $err');
         return {
           'status': false,
           'data': [],
-          'msg': err.toString(),
+          'msg': '动态解析失败，请稍后重试',
         };
       }
     } else {
@@ -106,10 +107,11 @@ class DynamicsHttp {
           'data': DynamicItemModel.fromJson(res.data['data']['item']),
         };
       } catch (err) {
+        print('dynamicDetail parse error: $err');
         return {
           'status': false,
           'data': [],
-          'msg': err.toString(),
+          'msg': '动态详情解析失败，请稍后重试',
         };
       }
     } else {

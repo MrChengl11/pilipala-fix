@@ -5,14 +5,18 @@ import 'index.dart';
 class HtmlHttp {
   // article
   static Future reqHtml(id, dynamicType) async {
-    var response = await Request().get(
-      "https://www.bilibili.com/opus/$id",
-      extra: {'ua': 'pc'},
-    );
+    try {
+      var response = await Request().get(
+        "https://www.bilibili.com/opus/$id",
+        extra: {'ua': 'pc'},
+      );
 
     if (response.data.contains('Redirecting to')) {
       RegExp regex = RegExp(r'//([\w\.]+)/(\w+)/(\w+)');
-      Match match = regex.firstMatch(response.data)!;
+      final Match? match = regex.firstMatch(response.data);
+      if (match == null) {
+        return _htmlError();
+      }
       String matchedString = match.group(0)!;
       response = await Request().get(
         'https:$matchedString/',
@@ -63,11 +67,30 @@ class HtmlHttp {
       };
     } catch (err) {
       print('err: $err');
+      return _htmlError();
     }
+    } catch (err) {
+      // 网络/请求层异常同样降级为占位结果
+      print('reqHtml error: $err');
+      return _htmlError();
+    }
+  }
+
+  // 解析失败时返回可安全取值的占位结果，避免调用方 res['commentId'] 抛 NoSuchMethodError
+  static Map<String, dynamic> _htmlError() {
+    return {
+      'status': false,
+      'avatar': '',
+      'uname': '',
+      'updateTime': '',
+      'content': '',
+      'commentId': 0,
+    };
   }
 
   // read
   static Future reqReadHtml(id, dynamicType) async {
+    try {
     var response = await Request().get(
       "https://www.bilibili.com/$dynamicType/$id/",
       extra: {'ua': 'pc'},
@@ -94,6 +117,9 @@ class HtmlHttp {
         opusDetail.querySelector('#read-article-holder')!.innerHtml;
     RegExp digitRegExp = RegExp(r'\d+');
     Iterable<Match> matches = digitRegExp.allMatches(id);
+    if (matches.isEmpty) {
+      return _htmlError();
+    }
     String number = matches.first.group(0)!;
     return {
       'status': true,
@@ -103,5 +129,9 @@ class HtmlHttp {
       'content': opusContent,
       'commentId': int.parse(number)
     };
+    } catch (err) {
+      print('reqReadHtml error: $err');
+      return _htmlError();
+    }
   }
 }

@@ -45,6 +45,7 @@ class _VideoDetailPageState extends State<VideoDetailPage>
     with TickerProviderStateMixin, RouteAware, WidgetsBindingObserver {
   late VideoDetailController vdCtr;
   PlPlayerController? plPlayerController;
+  StreamSubscription<bool>? _fullScreenStatusSub; // 全屏状态监听，需在 dispose 中取消
   final ScrollController _extendNestCtr = ScrollController();
   late StreamController<double> appbarStream;
   late VideoIntroController videoIntroController;
@@ -184,6 +185,8 @@ class _VideoDetailPageState extends State<VideoDetailPage>
     await vdCtr.playerInit(autoplay: true);
     plPlayerController = vdCtr.plPlayerController;
     plPlayerController!.addStatusLister(playerListener);
+    // initState 时播放器还不存在，这里创建后补注册全屏状态监听（内部已防重复）
+    fullScreenStatusListener();
     vdCtr.autoPlay.value = true;
     vdCtr.isShowCover.value = false;
     isShowing.value = true;
@@ -191,7 +194,13 @@ class _VideoDetailPageState extends State<VideoDetailPage>
   }
 
   void fullScreenStatusListener() {
-    plPlayerController?.isFullScreen.listen((bool isFullScreen) {
+    _fullScreenStatusSub?.cancel();
+    final PlPlayerController? controller = plPlayerController;
+    if (controller == null) {
+      // 关闭自动播放时播放器尚未创建，handlePlay() 创建后会再次调用本方法补注册
+      return;
+    }
+    _fullScreenStatusSub = controller.isFullScreen.listen((bool isFullScreen) {
       if (isFullScreen) {
         vdCtr.hiddenReplyReplyPanel();
         if (vdCtr.videoType == SearchType.video) {
@@ -210,9 +219,8 @@ class _VideoDetailPageState extends State<VideoDetailPage>
           }
         }
       } else {
-        if (vdCtr.bottomList.contains(BottomControlType.episode)) {
-          vdCtr.bottomList.removeAt(3);
-        }
+        // 用 remove 而不是 removeAt(3)：bottomList 顺序变化时下标可能不是 episode
+        vdCtr.bottomList.remove(BottomControlType.episode);
       }
       vdCtr.toggeleWatchLaterVisible(!isFullScreen);
     });
@@ -237,6 +245,7 @@ class _VideoDetailPageState extends State<VideoDetailPage>
       floating.toggleAutoPip(autoEnter: false);
       floating.dispose();
     }
+    _fullScreenStatusSub?.cancel();
     appbarStream.close();
     WidgetsBinding.instance.removeObserver(this);
     _lifecycleListener.dispose();
@@ -251,9 +260,10 @@ class _VideoDetailPageState extends State<VideoDetailPage>
       return;
     }
 
-    /// 开启
-    if (setting.get(SettingBoxKey.enableAutoBrightness, defaultValue: false)
-        as bool) {
+    /// 开启自动亮度时记录当前亮度（关闭自动播放时播放器可能尚未创建，需判空）
+    if (plPlayerController != null &&
+        setting.get(SettingBoxKey.enableAutoBrightness, defaultValue: false)
+            as bool) {
       vdCtr.brightness = plPlayerController!.brightness.value;
     }
     if (plPlayerController != null) {
@@ -282,12 +292,16 @@ class _VideoDetailPageState extends State<VideoDetailPage>
     }
     vdCtr.isFirstTime = false;
     final bool autoplay = autoPlayEnable;
-    vdCtr.playerInit();
+    // 播放器仍存活时只需恢复进度；无条件 playerInit 会重建媒体源，导致每次返回都黑屏重缓冲
+    final bool playerAlive = plPlayerController?.videoPlayerController != null;
+    if (!playerAlive) {
+      vdCtr.playerInit();
+    }
 
     /// 未开启自动播放时，未播放跳转下一页返回/播放后跳转下一页返回
     vdCtr.autoPlay.value = !vdCtr.isShowCover.value;
     videoIntroController.isPaused = false;
-    if (_extendNestCtr.position.pixels == 0 && autoplay) {
+    if (autoplay && playerAlive) {
       await Future.delayed(const Duration(milliseconds: 300));
       plPlayerController?.seekTo(vdCtr.defaultST);
       plPlayerController?.play();

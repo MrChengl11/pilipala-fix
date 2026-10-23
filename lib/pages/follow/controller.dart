@@ -38,9 +38,9 @@ class FollowController extends GetxController with GetTickerProviderStateMixin {
   Future queryFollowings(type) async {
     if (type == 'init') {
       pn = 1;
-      loadingText.value == '加载中...';
-    }
-    if (loadingText.value == '没有更多了') {
+      loadingText.value = '加载中...';
+    } else if (loadingText.value == '没有更多了') {
+      // 仅上拉加载时拦截；下拉刷新必须放行
       return;
     }
     var res = await FollowHttp.followings(

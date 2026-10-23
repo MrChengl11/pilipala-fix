@@ -35,6 +35,13 @@ class ForwardSeekIndicatorState extends State<ForwardSeekIndicator> {
     });
   }
 
+  @override
+  void dispose() {
+    // 未取消的定时器会在组件销毁后仍回调 onSubmitted（此时播放器可能已释放）
+    timer?.cancel();
+    super.dispose();
+  }
+
   void increment() {
     timer?.cancel();
     timer = Timer(const Duration(milliseconds: 200), () {

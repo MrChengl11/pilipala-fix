@@ -35,7 +35,6 @@ class _WhisperPageState extends State<WhisperPage> {
       EasyThrottle.throttle('my-throttler', const Duration(milliseconds: 800),
           () async {
         await _whisperController.onLoad();
-        _whisperController.isLoading = true;
       });
     }
   }

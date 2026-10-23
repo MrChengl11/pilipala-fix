@@ -3,6 +3,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/constants.dart';
 import 'package:pilipala/common/widgets/badge.dart';
+import 'package:pilipala/common/widgets/http_error.dart';
 import 'package:pilipala/common/widgets/network_img_layer.dart';
 import 'package:pilipala/http/search.dart';
 import 'package:pilipala/models/bangumi/info.dart';
@@ -13,6 +14,15 @@ import 'package:pilipala/utils/utils.dart';
 Widget searchMbangumiPanel(BuildContext context, ctr, list) {
   TextStyle style =
       TextStyle(fontSize: Theme.of(context).textTheme.labelMedium!.fontSize);
+  // 搜索结果为空时原来的 ListView 什么都不渲染，整页纯白无任何反馈。
+  if (list == null || list!.isEmpty) {
+    return CustomScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      slivers: [
+        HttpError(errMsg: '没有数据', isShowBtn: false, fn: () => {}),
+      ],
+    );
+  }
   return ListView.builder(
     controller: ctr!.scrollController,
     addAutomaticKeepAlives: false,
