@@ -3,7 +3,6 @@ name: Bug 反馈
 about: 描述你所遇到的bug
 title: ''
 labels: 问题反馈
-assignees: guozhigq
 
 ---
 
