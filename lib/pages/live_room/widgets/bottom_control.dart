@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:floating/floating.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:pilipala/models/video/play/url.dart';
@@ -27,7 +28,7 @@ class BottomControl extends StatefulWidget implements PreferredSizeWidget {
   State<BottomControl> createState() => _BottomControlState();
 
   @override
-  Size get preferredSize => throw UnimplementedError();
+  Size get preferredSize => const Size(double.infinity, kToolbarHeight);
 }
 
 class _BottomControlState extends State<BottomControl> {
@@ -136,7 +137,9 @@ class _BottomControlState extends State<BottomControl> {
                   }
                   if (canUsePiP) {
                     await widget.floating!.enable();
-                  } else {}
+                  } else {
+                    SmartDialog.showToast('当前设备不支持画中画');
+                  }
                 },
                 icon: const Icon(
                   Icons.picture_in_picture_outlined,

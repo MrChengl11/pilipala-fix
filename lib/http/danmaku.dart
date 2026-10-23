@@ -55,48 +55,57 @@ class DanmakaHttp {
     // 构建参数对象
     // assert(aid != null || bvid != null);
     // assert(csrf != null || access_key != null);
-    assert(msg.length < 100);
-    // 构建参数对象
-    var params = <String, dynamic>{
-      'type': type,
-      'oid': oid,
-      'msg': msg,
-      'mode': mode,
-      //'aid': aid,
-      'bvid': bvid,
-      'progress': progress,
-      'color': color,
-      'fontsize': fontsize,
-      'pool': pool,
-      'rnd': DateTime.now().microsecondsSinceEpoch,
-      'colorful': colorful,
-      'checkbox_type': checkbox_type,
-      'csrf': await Request.getCsrf(),
-      // 'access_key': access_key,
-    }..removeWhere((key, value) => value == null);
+    // 弹幕长度由服务端校验（UI 侧已限制 100 字符），这里不能再 assert：
+    // debug 模式下恰好 100 字符会被断言打断，与 UI 的判定不一致
+    try {
+      // 构建参数对象
+      var params = <String, dynamic>{
+        'type': type,
+        'oid': oid,
+        'msg': msg,
+        'mode': mode,
+        //'aid': aid,
+        'bvid': bvid,
+        'progress': progress,
+        'color': color,
+        'fontsize': fontsize,
+        'pool': pool,
+        'rnd': DateTime.now().microsecondsSinceEpoch,
+        'colorful': colorful,
+        'checkbox_type': checkbox_type,
+        'csrf': await Request.getCsrf(),
+        // 'access_key': access_key,
+      }..removeWhere((key, value) => value == null);
 
-    var response = await Request().post(
-      Api.shootDanmaku,
-      data: params,
-    );
-    if (response.statusCode != 200) {
-      return {
-        'status': false,
-        'data': [],
-        'msg': '弹幕发送失败，状态码:${response.statusCode}',
-      };
-    }
-    if (response.data['code'] == 0) {
-      return {
-        'status': true,
-        'data': response.data['data'],
-      };
-    } else {
-      return {
-        'status': false,
-        'data': [],
-        'msg': "${response.data['code']}: ${response.data['message']}",
-      };
+      var response = await Request().post(
+        Api.shootDanmaku,
+        data: params,
+      );
+      if (response.statusCode != 200) {
+        return {
+          'status': false,
+          'data': [],
+          'msg': '弹幕发送失败，状态码:${response.statusCode}',
+        };
+      }
+      if (response.data is! Map) {
+        return {'status': false, 'data': [], 'msg': '弹幕发送失败，请稍后重试'};
+      }
+      if (response.data['code'] == 0) {
+        return {
+          'status': true,
+          'data': response.data['data'],
+        };
+      } else {
+        return {
+          'status': false,
+          'data': [],
+          'msg': "${response.data['code']}: ${response.data['message']}",
+        };
+      }
+    } catch (err) {
+      // 网络异常不能让调用方一直停在“发送中”
+      return {'status': false, 'data': [], 'msg': '弹幕发送失败，请检查网络后重试'};
     }
   }
 }

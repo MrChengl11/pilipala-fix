@@ -10,9 +10,18 @@ class RoutePush {
   static Future<void> bangumiPush(int? seasonId, int? epId,
       {String? heroTag}) async {
     SmartDialog.showLoading<dynamic>(msg: '获取中...');
+    // catch 分支若不 dismiss，loading 遮罩会永久挂在屏幕上
+    bool dismissed = false;
+    void dismissOnce() {
+      if (!dismissed) {
+        dismissed = true;
+        SmartDialog.dismiss(status: SmartStatus.loading);
+      }
+    }
+
     try {
       var result = await SearchHttp.bangumiInfo(seasonId: seasonId, epId: epId);
-      await SmartDialog.dismiss();
+      dismissOnce();
       if (result['status']) {
         if (result['data'].episodes.isEmpty) {
           SmartDialog.showToast('资源获取失败');
@@ -38,6 +47,7 @@ class RoutePush {
         SmartDialog.showToast(result['msg']);
       }
     } catch (e) {
+      dismissOnce();
       SmartDialog.showToast('番剧获取失败：$e');
     }
   }

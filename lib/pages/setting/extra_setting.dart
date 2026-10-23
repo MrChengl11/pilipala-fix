@@ -31,15 +31,30 @@ class _ExtraSettingState extends State<ExtraSetting> {
   void initState() {
     super.initState();
     // 默认优先显示最新评论
-    defaultReplySort =
+    final dynamic storedReplySort =
         setting.get(SettingBoxKey.replySortType, defaultValue: 0);
-    if (defaultReplySort == 2) {
+    // 2 是历史废弃值；越界/非 int 的脏值同样回退到 0，
+    // 否则下面 ReplySortType.values[defaultReplySort] 会 RangeError 白屏
+    if (storedReplySort is! int ||
+        storedReplySort == 2 ||
+        storedReplySort < 0 ||
+        storedReplySort >= ReplySortType.values.length) {
       setting.put(SettingBoxKey.replySortType, 0);
       defaultReplySort = 0;
+    } else {
+      defaultReplySort = storedReplySort;
     }
     // 优先展示全部动态 all
-    defaultDynamicType =
+    final dynamic storedDynamicType =
         setting.get(SettingBoxKey.defaultDynamicType, defaultValue: 0);
+    if (storedDynamicType is! int ||
+        storedDynamicType < 0 ||
+        storedDynamicType >= DynamicsType.values.length) {
+      setting.put(SettingBoxKey.defaultDynamicType, 0);
+      defaultDynamicType = 0;
+    } else {
+      defaultDynamicType = storedDynamicType;
+    }
     enableSystemProxy =
         setting.get(SettingBoxKey.enableSystemProxy, defaultValue: false);
     defaultSystemProxyHost =
@@ -152,7 +167,11 @@ class _ExtraSettingState extends State<ExtraSetting> {
             setKey: SettingBoxKey.enableSearchWord,
             defaultVal: true,
             callFn: (val) {
-              Get.find<HomeController>().defaultSearch.value = '';
+              // HomeController 未注册时 Get.find 会抛 "[Get] HomeController
+              // not found"（例如直接从深链进设置页）
+              if (Get.isRegistered<HomeController>()) {
+                Get.find<HomeController>().defaultSearch.value = '';
+              }
             },
           ),
           const SetSwitchItem(

@@ -17,7 +17,12 @@ class RoomInfoModel {
     liveStatus = json['live_status'];
     isPortrait = json['is_portrait'];
     liveTime = json['live_time'];
-    playurlInfo = PlayurlInfo.fromJson(json['playurl_info']);
+    // 未开播/无播放地址的直播间 playurl_info 为 null，直接 fromJson 会
+    // NoSuchMethodError: The method '[]' was called on null，导致整页黑屏
+    final dynamic _playurlInfo = json['playurl_info'];
+    playurlInfo = _playurlInfo is Map
+        ? PlayurlInfo.fromJson(Map<String, dynamic>.from(_playurlInfo))
+        : null;
   }
 }
 
@@ -29,7 +34,10 @@ class PlayurlInfo {
   Playurl? playurl;
 
   PlayurlInfo.fromJson(Map<String, dynamic> json) {
-    playurl = Playurl.fromJson(json['playurl']);
+    final dynamic _playurl = json['playurl'];
+    playurl = _playurl is Map
+        ? Playurl.fromJson(Map<String, dynamic>.from(_playurl))
+        : null;
   }
 }
 
@@ -46,9 +54,20 @@ class Playurl {
 
   Playurl.fromJson(Map<String, dynamic> json) {
     cid = json['cid'];
-    gQnDesc =
-        json['g_qn_desc'].map<GQnDesc>((e) => GQnDesc.fromJson(e)).toList();
-    stream = json['stream'].map<Streams>((e) => Streams.fromJson(e)).toList();
+    final dynamic _gQnDesc = json['g_qn_desc'];
+    gQnDesc = _gQnDesc is List
+        ? _gQnDesc
+            .whereType<Map>()
+            .map<GQnDesc>((e) => GQnDesc.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+        : <GQnDesc>[];
+    final dynamic _stream = json['stream'];
+    stream = _stream is List
+        ? _stream
+            .whereType<Map>()
+            .map<Streams>((e) => Streams.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+        : <Streams>[];
   }
 }
 
@@ -84,8 +103,14 @@ class Streams {
 
   Streams.fromJson(Map<String, dynamic> json) {
     protocolName = json['protocol_name'];
-    format =
-        json['format'].map<FormatItem>((e) => FormatItem.fromJson(e)).toList();
+    final dynamic _format = json['format'];
+    format = _format is List
+        ? _format
+            .whereType<Map>()
+            .map<FormatItem>(
+                (e) => FormatItem.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+        : <FormatItem>[];
   }
 }
 
@@ -100,7 +125,13 @@ class FormatItem {
 
   FormatItem.fromJson(Map<String, dynamic> json) {
     formatName = json['format_name'];
-    codec = json['codec'].map<CodecItem>((e) => CodecItem.fromJson(e)).toList();
+    final dynamic _codec = json['codec'];
+    codec = _codec is List
+        ? _codec
+            .whereType<Map>()
+            .map<CodecItem>((e) => CodecItem.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+        : <CodecItem>[];
   }
 }
 
@@ -130,9 +161,14 @@ class CodecItem {
     currentQn = json['current_qn'];
     acceptQn = json['accept_qn'];
     baseUrl = json['base_url'];
-    urlInfo = json['url_info']
-        .map<UrlInfoItem>((e) => UrlInfoItem.fromJson(e))
-        .toList();
+    final dynamic _urlInfo = json['url_info'];
+    urlInfo = _urlInfo is List
+        ? _urlInfo
+            .whereType<Map>()
+            .map<UrlInfoItem>(
+                (e) => UrlInfoItem.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+        : <UrlInfoItem>[];
     hdrQn = json['hdr_n'];
     dolbyType = json['dolby_type'];
     attrName = json['attr_name'];

@@ -46,7 +46,8 @@ class LiveCardV extends StatelessWidget {
                     Hero(
                       tag: heroTag,
                       child: NetworkImgLayer(
-                        src: liveItem.cover!,
+                        // cover 可能为 null（接口偶发缺字段），null! 会让整张卡片崩
+                        src: liveItem.cover,
                         width: maxWidth,
                         height: maxHeight,
                       ),
@@ -95,7 +96,7 @@ class LiveContent extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              liveItem.title,
+              liveItem.title ?? '',
               textAlign: TextAlign.start,
               style: const TextStyle(
                 fontWeight: FontWeight.w500,
@@ -109,7 +110,7 @@ class LiveContent extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    liveItem.uname,
+                    liveItem.uname ?? '',
                     textAlign: TextAlign.start,
                     style: TextStyle(
                       fontSize:
@@ -122,7 +123,7 @@ class LiveContent extends StatelessWidget {
                 ),
                 if (crossAxisCount == 1) ...[
                   Text(
-                    ' • ${liveItem!.areaName!}',
+                    ' • ${liveItem!.areaName ?? ''}',
                     style: TextStyle(
                       fontSize:
                           Theme.of(context).textTheme.labelMedium!.fontSize,
@@ -130,7 +131,7 @@ class LiveContent extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    ' • ${liveItem!.watchedShow!['text_small']}人观看',
+                    ' • ${liveItem!.watchedShow?['text_small'] ?? ''}人观看',
                     style: TextStyle(
                       fontSize:
                           Theme.of(context).textTheme.labelMedium!.fontSize,
@@ -174,12 +175,18 @@ class VideoStat extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            liveItem!.areaName!,
-            style: const TextStyle(fontSize: 11, color: Colors.white),
+          Flexible(
+            child: Text(
+              liveItem?.areaName ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: Colors.white),
+            ),
           ),
+          const SizedBox(width: 6),
           Text(
-            liveItem!.watchedShow!['text_small'],
+            (liveItem?.watchedShow?['text_small'] ?? '').toString(),
+            maxLines: 1,
             style: const TextStyle(fontSize: 11, color: Colors.white),
           ),
         ],

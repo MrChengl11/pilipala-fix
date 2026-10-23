@@ -24,6 +24,7 @@ class _ZonePageState extends State<ZonePage>
   List videoList = [];
   Future? _futureBuilderFuture;
   late ScrollController scrollController;
+  late VoidCallback _scrollListener;
 
   @override
   bool get wantKeepAlive => true;
@@ -34,23 +35,25 @@ class _ZonePageState extends State<ZonePage>
     _zoneController = Get.put(ZoneController(), tag: widget.rid.toString());
     _futureBuilderFuture = _zoneController.queryRankFeed('init', widget.rid);
     scrollController = _zoneController.scrollController;
-    scrollController.addListener(
-      () {
-        if (scrollController.position.pixels >=
-            scrollController.position.maxScrollExtent - 200) {
-          if (!_zoneController.isLoadingMore) {
-            _zoneController.isLoadingMore = true;
-            _zoneController.onLoad();
-          }
+    // 监听器必须存引用，dispose 里才能真正移除；
+    // 原来 removeListener(() {}) 是空函数，监听器永远泄漏。
+    _scrollListener = () {
+      if (!scrollController.hasClients) return;
+      if (scrollController.position.pixels >=
+          scrollController.position.maxScrollExtent - 200) {
+        if (!_zoneController.isLoadingMore) {
+          _zoneController.isLoadingMore = true;
+          _zoneController.onLoad();
         }
-        handleScrollEvent(scrollController);
-      },
-    );
+      }
+      handleScrollEvent(scrollController);
+    };
+    scrollController.addListener(_scrollListener);
   }
 
   @override
   void dispose() {
-    scrollController.removeListener(() {});
+    scrollController.removeListener(_scrollListener);
     super.dispose();
   }
 
@@ -72,8 +75,8 @@ class _ZonePageState extends State<ZonePage>
               future: _futureBuilderFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.done) {
-                  Map data = snapshot.data as Map;
-                  if (data['status']) {
+                  final Map? data = snapshot.data as Map?;
+                  if (data != null && data['status']) {
                     return Obx(
                       () => SliverList(
                         delegate: SliverChildBuilderDelegate((context, index) {
@@ -86,7 +89,9 @@ class _ZonePageState extends State<ZonePage>
                     );
                   } else {
                     return HttpError(
-                      errMsg: data['msg'],
+                      errMsg: data == null
+                          ? '请求异常'
+                          : (data['msg']?.toString() ?? '请求异常'),
                       fn: () {
                         setState(() {
                           _futureBuilderFuture =

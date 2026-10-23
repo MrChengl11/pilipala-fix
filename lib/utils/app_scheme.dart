@@ -124,6 +124,14 @@ class PiliSchame {
   // 投稿跳转
   static Future<void> _videoPush(int? aidVal, String? bvidVal) async {
     SmartDialog.showLoading<dynamic>(msg: '获取中...');
+    bool dismissed = false;
+    void dismissOnce() {
+      if (!dismissed) {
+        dismissed = true;
+        SmartDialog.dismiss<dynamic>(status: SmartStatus.loading);
+      }
+    }
+
     try {
       int? aid = aidVal;
       String? bvid = bvidVal;
@@ -135,15 +143,15 @@ class PiliSchame {
       }
       final int cid = await SearchHttp.ab2c(bvid: bvidVal, aid: aidVal);
       final String heroTag = Utils.makeHeroTag(aid);
-      SmartDialog.dismiss<dynamic>().then(
-        // ignore: always_specify_types
-        (e) => Get.toNamed<dynamic>('/video?bvid=$bvid&cid=$cid',
-            arguments: <String, String?>{
-              'pic': '',
-              'heroTag': heroTag,
-            }),
-      );
+      dismissOnce();
+      Get.toNamed<dynamic>('/video?bvid=$bvid&cid=$cid',
+          arguments: <String, String?>{
+            'pic': '',
+            'heroTag': heroTag,
+          });
     } catch (e) {
+      // catch 分支若不 dismiss，loading 遮罩会永久挂在屏幕上
+      dismissOnce();
       SmartDialog.showToast('video获取失败: $e');
     }
   }
@@ -241,11 +249,21 @@ class PiliSchame {
       final String area = path.split('/').last;
       switch (area) {
         case 'bangumi':
-          print('番剧');
-          if (area.startsWith('ep')) {
-            RoutePush.bangumiPush(null, Utils.matchNum(area).first);
-          } else if (area.startsWith('ss')) {
-            RoutePush.bangumiPush(Utils.matchNum(area).first, null);
+          // area 是 path 的最后一个片段，可能是 ep123/ss456，
+          // 也可能是 play/ep123 这类多段路径。原来只判断 area 前缀，
+          // 且 matchNum 结果为空时 .first 直接抛 StateError（深链静默失败）。
+          final List<int> bangumiIds = Utils.matchNum(area);
+          if (bangumiIds.isEmpty) {
+            SmartDialog.showToast('番剧匹配失败');
+            return;
+          }
+          if (area.contains('ep')) {
+            RoutePush.bangumiPush(null, bangumiIds.first);
+          } else if (area.contains('ss')) {
+            RoutePush.bangumiPush(bangumiIds.first, null);
+          } else {
+            SmartDialog.showToast('番剧匹配失败');
+            return;
           }
           break;
         case 'video':
@@ -260,8 +278,14 @@ class PiliSchame {
           }
           break;
         case 'read':
-          print('专栏');
-          String id = Utils.matchNum(query!['id']!).first.toString();
+          // query 或 id 缺失时 query!['id']! 直接 null check 崩溃，
+          // 匹配不到数字时 .first 抛 StateError
+          final List<int> readIds = Utils.matchNum(query?['id'] ?? '');
+          if (readIds.isEmpty) {
+            SmartDialog.showToast('专栏匹配失败');
+            return;
+          }
+          final String id = readIds.first.toString();
           Get.toNamed('/read', parameters: {
             'url': value.dataString!,
             'title': '',

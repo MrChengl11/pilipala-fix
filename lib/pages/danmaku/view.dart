@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
@@ -41,6 +43,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
   late double danmakuDurationVal;
   late double strokeWidth;
   int latestAddedPosition = -1;
+  StreamSubscription<bool>? _danmuOpenSubscription;
 
   @override
   void initState() {
@@ -60,7 +63,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
         ..addPositionListener(videoPositionListen);
     }
     if (widget.type == 'video') {
-      playerController.isOpenDanmu.listen((p0) {
+      _danmuOpenSubscription = playerController.isOpenDanmu.listen((p0) {
         if (p0 && !_plDanmakuController.initiated) {
           _plDanmakuController.initiate(
               playerController.duration.value.inMilliseconds,
@@ -79,10 +82,10 @@ class _PlDanmakuState extends State<PlDanmaku> {
   // 播放器状态监听
   void playerListener(PlayerStatus? status) {
     if (status == PlayerStatus.paused) {
-      _controller!.pause();
+      _controller?.pause();
     }
     if (status == PlayerStatus.playing) {
-      _controller!.onResume();
+      _controller?.onResume();
     }
   }
 
@@ -101,12 +104,13 @@ class _PlDanmakuState extends State<PlDanmaku> {
     List<DanmakuElem>? currentDanmakuList =
         _plDanmakuController.getCurrentDanmaku(currentPosition);
 
-    if (currentDanmakuList != null) {
+    final DanmakuController? danmakuController = _controller;
+    if (currentDanmakuList != null && danmakuController != null) {
       Color? defaultColor = playerController.blockTypes.contains(6)
           ? DmUtils.decimalToColor(16777215)
           : null;
 
-      _controller!.addItems(currentDanmakuList
+      danmakuController.addItems(currentDanmakuList
           .map((e) => DanmakuItem(
                 e.content,
                 color: defaultColor ?? DmUtils.decimalToColor(e.color),
@@ -119,7 +123,11 @@ class _PlDanmakuState extends State<PlDanmaku> {
 
   @override
   void dispose() {
+    // 播放器状态监听、弹幕开关监听、位置监听都需要在页面销毁时解绑，
+    // 否则详情页反复进入会累积监听并回调到已销毁的 State。
+    playerController.removeStatusLister(playerListener);
     playerController.removePositionListener(videoPositionListen);
+    _danmuOpenSubscription?.cancel();
     super.dispose();
   }
 

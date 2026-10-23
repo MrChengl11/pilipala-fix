@@ -25,6 +25,14 @@ class _FavPanelState extends State<FavPanel> {
     _futureBuilderFuture = widget.ctr!.queryVideoInFolder();
   }
 
+  /// 重新发起请求并重建 FutureBuilder
+  void _refresh() {
+    if (!mounted) return;
+    setState(() {
+      _futureBuilderFuture = widget.ctr!.queryVideoInFolder();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -47,53 +55,67 @@ class _FavPanelState extends State<FavPanel> {
             child: FutureBuilder(
               future: _futureBuilderFuture,
               builder: (BuildContext context, AsyncSnapshot snapshot) {
-                if (snapshot.connectionState == ConnectionState.done) {
-                  Map data = snapshot.data as Map;
-                  if (data['status']) {
-                    return Obx(
-                      () => ListView.builder(
-                        controller: widget.scrollController,
-                        itemCount: widget.ctr!.favFolderData.value.list!.length,
-                        itemBuilder: (context, index) {
-                          final item =
-                              widget.ctr!.favFolderData.value.list![index];
-                          return ListTile(
-                            onTap: () =>
-                                widget.ctr!.onChoose(item.favState != 1, index),
-                            dense: true,
-                            leading: Icon([23, 1].contains(item.attr)
-                                ? Icons.lock_outline
-                                : Icons.folder_outlined),
-                            minLeadingWidth: 0,
-                            title: Text(item.title!),
-                            subtitle: Text(
-                              '${item.mediaCount}个内容 - ${[
-                                23,
-                                1
-                              ].contains(item.attr) ? '私密' : '公开'}',
-                            ),
-                            trailing: Transform.scale(
-                              scale: 0.9,
-                              child: Checkbox(
-                                value: item.favState == 1,
-                                onChanged: (bool? checkValue) =>
-                                    widget.ctr!.onChoose(checkValue!, index),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  } else {
-                    return HttpError(
-                      errMsg: data['msg'],
-                      fn: () => setState(() {}),
-                    );
-                  }
-                } else {
+                if (snapshot.connectionState != ConnectionState.done) {
                   // 骨架屏
                   return const Text('请求中');
                 }
+                // 请求异常时 snapshot.data 为 null，直接 as Map 会抛 CastError
+                final dynamic data = snapshot.data;
+                if (snapshot.hasError || data is! Map) {
+                  return HttpError(
+                    errMsg: '获取收藏夹失败',
+                    fn: _refresh,
+                  );
+                }
+                if (data['status'] != true) {
+                  return HttpError(
+                    errMsg: data['msg'] ?? '获取收藏夹失败',
+                    fn: _refresh,
+                  );
+                }
+                return Obx(
+                  () {
+                    final folderList =
+                        widget.ctr!.favFolderData.value.list ?? [];
+                    if (folderList.isEmpty) {
+                      return HttpError(
+                        errMsg: '暂无收藏夹',
+                        fn: _refresh,
+                      );
+                    }
+                    return ListView.builder(
+                      controller: widget.scrollController,
+                      itemCount: folderList.length,
+                      itemBuilder: (context, index) {
+                        final item = folderList[index];
+                        return ListTile(
+                          onTap: () =>
+                              widget.ctr!.onChoose(item.favState != 1, index),
+                          dense: true,
+                          leading: Icon([23, 1].contains(item.attr)
+                              ? Icons.lock_outline
+                              : Icons.folder_outlined),
+                          minLeadingWidth: 0,
+                          title: Text(item.title ?? '未命名收藏夹'),
+                          subtitle: Text(
+                            '${item.mediaCount}个内容 - ${[
+                              23,
+                              1
+                            ].contains(item.attr) ? '私密' : '公开'}',
+                          ),
+                          trailing: Transform.scale(
+                            scale: 0.9,
+                            child: Checkbox(
+                              value: item.favState == 1,
+                              onChanged: (bool? checkValue) =>
+                                  widget.ctr!.onChoose(checkValue!, index),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
               },
             ),
           ),

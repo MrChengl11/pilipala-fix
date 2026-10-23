@@ -72,14 +72,19 @@ class _BlackListPageState extends State<BlackListPage> {
           future: _futureBuilderFuture,
           builder: (BuildContext context, AsyncSnapshot snapshot) {
             if (snapshot.connectionState == ConnectionState.done) {
-              var data = snapshot.data;
-              if (data['status']) {
+              // snapshot.data 可能为 null（future error 完成）
+              final data = snapshot.data as Map?;
+              if (data != null && data['status'] == true) {
                 List<BlackListItem> list = _blackListController.blackList;
                 return Obx(
                   () => list.isEmpty
                       ? CustomScrollView(
                           slivers: [
-                            HttpError(errMsg: '你没有拉黑任何人哦～_～', fn: () => {})
+                            // 原 fn: () => {} 是返回 Set 字面量的箭头函数，点了没反应
+                            HttpError(
+                                errMsg: '你没有拉黑任何人哦～_～',
+                                fn: () async =>
+                                    await _blackListController.queryBlacklist())
                           ],
                         )
                       : ListView.builder(
@@ -122,7 +127,7 @@ class _BlackListPageState extends State<BlackListPage> {
                 return CustomScrollView(
                   slivers: [
                     HttpError(
-                      errMsg: data['msg'],
+                      errMsg: data?['msg'] ?? snapshot.error?.toString(),
                       fn: () => _blackListController.queryBlacklist(),
                     )
                   ],

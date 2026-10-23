@@ -34,52 +34,62 @@ class VideoReplyReplyController extends GetxController {
       return;
     }
     isLoadingMore = true;
-    final res = await ReplyHttp.replyReplyList(
-      oid: aid!,
-      root: rpid!,
-      pageNum: currentPage + 1,
-      type: replyType.index,
-    );
-    if (res['status']) {
-      final List<ReplyItemModel> replies = res['data'].replies;
-      if (replies.isNotEmpty) {
-        noMore.value = '加载中...';
-        if (replies.length == res['data'].page.count) {
-          noMore.value = '没有更多了';
+    try {
+      final res = await ReplyHttp.replyReplyList(
+        oid: aid!,
+        root: rpid!,
+        pageNum: currentPage + 1,
+        type: replyType.index,
+      );
+      if (res['status']) {
+        final List<ReplyItemModel> replies = res['data'].replies;
+        if (replies.isNotEmpty) {
+          noMore.value = '加载中...';
+          final int? totalCount = res['data'].page?.count;
+          if (totalCount != null && replies.length == totalCount) {
+            noMore.value = '没有更多了';
+          }
+          currentPage++;
+        } else {
+          // 未登录状态replies可能返回null
+          noMore.value = currentPage == 0 ? '还没有评论' : '没有更多了';
         }
-        currentPage++;
-      } else {
-        // 未登录状态replies可能返回null
-        noMore.value = currentPage == 0 ? '还没有评论' : '没有更多了';
-      }
-      if (type == 'init') {
-        replyList.value = replies;
-      } else {
-        // 每次回复之后，翻页请求有且只有相同的一条回复数据
-        if (replies.length == 1 &&
-            replyList.isNotEmpty &&
-            replies.last.rpid == replyList.last.rpid) {
-          noMore.value = '没有更多了';
-          isLoadingMore = false;
-          return;
+        if (type == 'init') {
+          replyList.value = replies;
+        } else {
+          // 每次回复之后，翻页请求有且只有相同的一条回复数据
+          if (replies.length == 1 &&
+              replyList.isNotEmpty &&
+              replies.last.rpid == replyList.last.rpid) {
+            noMore.value = '没有更多了';
+            return res;
+          }
+          replyList.addAll(replies);
+          // res['data'].replies.addAll(replyList);
         }
-        replyList.addAll(replies);
-        // res['data'].replies.addAll(replyList);
       }
+      if (replyList.isNotEmpty && currentReply != null) {
+        int indexToRemove =
+            replyList.indexWhere((item) => currentReply.rpid == item.rpid);
+        // 如果找到了指定ID的项，则移除
+        if (indexToRemove != -1) {
+          replyList.removeAt(indexToRemove);
+        }
+        if (currentPage == 1 && type == 'init') {
+          replyList.insert(0, currentReply);
+        }
+      }
+      return res;
+    } catch (e) {
+      // 网络/接口异常：返回失败结构让 UI 显示错误并可重试，避免 isLoadingMore 永久卡死
+      return {
+        'status': false,
+        'code': -1,
+        'msg': '回复加载失败，请稍后重试',
+      };
+    } finally {
+      isLoadingMore = false;
     }
-    if (replyList.isNotEmpty && currentReply != null) {
-      int indexToRemove =
-          replyList.indexWhere((item) => currentReply.rpid == item.rpid);
-      // 如果找到了指定ID的项，则移除
-      if (indexToRemove != -1) {
-        replyList.removeAt(indexToRemove);
-      }
-      if (currentPage == 1 && type == 'init') {
-        replyList.insert(0, currentReply);
-      }
-    }
-    isLoadingMore = false;
-    return res;
   }
 
   @override

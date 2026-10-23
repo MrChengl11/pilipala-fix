@@ -510,19 +510,29 @@ class VideoHttp {
     int? cid,
     int? upMid,
   }) async {
-    Map params = await WbiSign().makSign({
-      'bvid': bvid,
-      'cid': cid,
-      'up_mid': upMid,
-    });
-    var res = await Request().get(Api.aiConclusion, data: params);
-    if (res.data['code'] == 0 && res.data['data']['code'] == 0) {
-      return {
-        'status': true,
-        'data': AiConclusionModel.fromJson(res.data['data']),
-      };
-    } else {
-      return {'status': false, 'data': []};
+    try {
+      Map params = await WbiSign().makSign({
+        'bvid': bvid,
+        'cid': cid,
+        'up_mid': upMid,
+      });
+      var res = await Request().get(Api.aiConclusion, data: params);
+      // data 可能为 null（视频不支持AI总结 / 风控），不能直接下标取值
+      final dynamic data = res.data['data'];
+      if (res.data['code'] == 0 && data is Map && data['code'] == 0) {
+        return {
+          'status': true,
+          'data': AiConclusionModel.fromJson(Map<String, dynamic>.from(data)),
+        };
+      } else {
+        return {
+          'status': false,
+          'data': [],
+          'msg': res.data['message'] ?? res.data['msg'],
+        };
+      }
+    } catch (err) {
+      return {'status': false, 'data': [], 'msg': err.toString()};
     }
   }
 
@@ -538,10 +548,19 @@ class VideoHttp {
           'data': SubTitlteModel.fromJson(res.data['data']),
         };
       } else {
-        return {'status': false, 'data': [], 'msg': res.data['msg']};
+        return {
+          'status': false,
+          'data': [],
+          'msg': res.data['message'] ?? res.data['msg'],
+        };
       }
     } catch (err) {
-      return {'status': false, 'data': [], 'msg': res.data['msg']};
+      return {
+        'status': false,
+        'data': [],
+        'msg':
+            res.data is Map ? (res.data['message'] ?? res.data['msg']) : null,
+      };
     }
   }
 
@@ -570,10 +589,18 @@ class VideoHttp {
 
   // 获取字幕内容
   static Future<Map<String, dynamic>> getSubtitleContent(url) async {
-    var res = await Request().get('https:$url');
-    final String content =
-        await SubTitleUtils.convertToWebVTT(res.data['body']);
-    final List body = res.data['body'];
-    return {'content': content, 'body': body};
+    // 字幕文件与普通接口不同，可能返回非 JSON 或 404，失败时返回空内容而不是抛异常
+    try {
+      var res = await Request().get('https:$url');
+      final dynamic bodyData = res.data is Map ? res.data['body'] : null;
+      if (res.data is! Map || res.data['code'] != 0 || bodyData is! List) {
+        return {'content': '', 'body': []};
+      }
+      final List body = bodyData;
+      final String content = await SubTitleUtils.convertToWebVTT(body);
+      return {'content': content, 'body': body};
+    } catch (err) {
+      return {'content': '', 'body': []};
+    }
   }
 }

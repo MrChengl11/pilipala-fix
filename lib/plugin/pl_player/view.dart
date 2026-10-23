@@ -166,8 +166,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       try {
         _brightnessValue.value = await ScreenBrightness().current;
         _brightnessSubscription?.cancel();
-        _brightnessSubscription =
-            ScreenBrightness().onCurrentBrightnessChanged.listen((double value) {
+        _brightnessSubscription = ScreenBrightness()
+            .onCurrentBrightnessChanged
+            .listen((double value) {
           if (mounted) {
             _brightnessValue.value = value;
           }
@@ -856,6 +857,14 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   'assets/loading.json',
                   width: 200,
                 ),
+              ),
+            );
+          } else if (_.dataStatus.error) {
+            // 数据源准备失败时给出可见提示，避免只剩黑屏
+            return const Center(
+              child: Text(
+                '播放失败，请返回重试',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
             );
           } else {

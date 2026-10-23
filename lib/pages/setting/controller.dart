@@ -5,6 +5,7 @@ import 'package:hive/hive.dart';
 import 'package:pilipala/http/init.dart';
 import 'package:pilipala/models/common/theme_type.dart';
 import 'package:pilipala/utils/feed_back.dart';
+import 'package:pilipala/utils/global_data_cache.dart';
 import 'package:pilipala/utils/login.dart';
 import 'package:pilipala/utils/storage.dart';
 import '../../models/common/dynamic_badge_mode.dart';
@@ -69,6 +70,11 @@ class SettingController extends GetxController {
                 userInfoCache.put('userInfoCache', null);
                 localCache
                     .put(LocalCacheKey.accessKey, {'mid': -1, 'value': ''});
+
+                // 清掉上一个账号的 x-bili-mid / x-bili-aurora-eid 请求头，
+                // 并同步 GlobalDataCache.userInfo，否则退出后仍是旧账号身份
+                Request.setOptionsHeaders(null, false);
+                GlobalDataCache().refreshUserInfo();
 
                 await LoginUtils.refreshLoginStatus(false);
                 SmartDialog.dismiss().then((value) => Get.back());

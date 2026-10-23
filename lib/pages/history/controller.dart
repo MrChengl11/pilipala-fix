@@ -44,16 +44,23 @@ class HistoryController extends GetxController {
       }
     }
     isLoadingMore.value = true;
-    var res = await UserHttp.historyList(max, viewAt);
-    isLoadingMore.value = false;
-    if (res['status']) {
-      if (type == 'onload') {
-        historyList.addAll(res['data'].list);
-      } else {
-        historyList.value = res['data'].list;
+    try {
+      var res = await UserHttp.historyList(max, viewAt);
+      if (res['status']) {
+        if (type == 'onload') {
+          historyList.addAll(res['data'].list);
+        } else {
+          historyList.value = res['data'].list;
+        }
       }
+      return res;
+    } catch (e) {
+      // 网络异常时原来不会复位 isLoadingMore，viewController 的
+      // !isLoadingMore 判断会永久失效（下拉刷新/上拉加载都不再触发）
+      return {'status': false, 'msg': '获取历史记录失败'};
+    } finally {
+      isLoadingMore.value = false;
     }
-    return res;
   }
 
   Future onLoad() async {
@@ -82,14 +89,18 @@ class HistoryController extends GetxController {
               onPressed: () async {
                 SmartDialog.showLoading(msg: '请求中');
                 var res = await UserHttp.pauseHistory(!pauseStatus.value);
-                SmartDialog.dismiss();
+                SmartDialog.dismiss(status: SmartStatus.loading);
+                // 先关确认弹窗：原来这里的 SmartDialog.dismiss() 会先把刚弹的
+                // toast 关掉，而确认弹窗一直留在页面上
+                SmartDialog.dismiss(status: SmartStatus.dialog);
                 if (res.data['code'] == 0) {
                   SmartDialog.showToast(
                       !pauseStatus.value ? '暂停观看历史' : '恢复观看历史');
                   pauseStatus.value = !pauseStatus.value;
                   localCache.put(LocalCacheKey.historyPause, pauseStatus.value);
+                } else {
+                  SmartDialog.showToast(res.data['message'] ?? '操作失败');
                 }
-                SmartDialog.dismiss();
               },
               child: Text(!pauseStatus.value ? '确认暂停' : '确认恢复'),
             )
@@ -125,14 +136,14 @@ class HistoryController extends GetxController {
               onPressed: () async {
                 SmartDialog.showLoading(msg: '请求中');
                 var res = await UserHttp.clearHistory();
-                SmartDialog.dismiss();
+                SmartDialog.dismiss(status: SmartStatus.loading);
+                SmartDialog.dismiss(status: SmartStatus.dialog);
                 if (res.data['code'] == 0) {
                   SmartDialog.showToast('清空观看历史');
                   historyList.clear();
                 } else {
                   SmartDialog.showToast(res.data['message'] ?? '清空失败');
                 }
-                SmartDialog.dismiss();
               },
               child: const Text('确认清空'),
             )

@@ -52,13 +52,12 @@ class _BangumiPanelState extends State<BangumiPanel> {
     super.initState();
     cid = widget.cid;
     videoDetailCtr = Get.find<VideoDetailController>(tag: heroTag);
-    currentIndex.value =
-        widget.pages.indexWhere((EpisodeItem e) => e.cid == cid);
+    // indexWhere 找不到 cid 时返回 -1，直接用于 widget.pages[-1] 会 RangeError
+    currentIndex.value = _safeIndex(cid);
     scrollToIndex();
     videoDetailCtr.cid.listen((int p0) {
       cid = p0;
-      currentIndex.value =
-          widget.pages.indexWhere((EpisodeItem e) => e.cid == cid);
+      currentIndex.value = _safeIndex(cid);
       scrollToIndex();
     });
 
@@ -67,6 +66,13 @@ class _BangumiPanelState extends State<BangumiPanel> {
     if (userInfo != null) {
       vipStatus = userInfo.vipStatus;
     }
+  }
+
+  /// 返回 cid 在 pages 中的下标；找不到时返回 -1（调用方需自行判断）
+  int _safeIndex(int? target) {
+    final idx =
+        widget.pages.indexWhere((EpisodeItem e) => e.cid == target);
+    return idx;
   }
 
   @override
@@ -127,7 +133,7 @@ class _BangumiPanelState extends State<BangumiPanel> {
               Expanded(
                 child: Obx(
                   () => Text(
-                    ' 正在播放：${widget.pages[currentIndex.value].longTitle}',
+                    ' 正在播放：${currentIndex.value >= 0 && currentIndex.value < widget.pages.length ? widget.pages[currentIndex.value].longTitle : ''}',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12,

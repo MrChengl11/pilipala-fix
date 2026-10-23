@@ -17,12 +17,42 @@ class ReadHttp {
     return scriptContents;
   }
 
+  /// 从页面里抽出下一个 script 标签的 JSON 内容并解析。
+  ///
+  /// 原实现直接用 extractScriptContents(...)[0] + substring + json.decode，
+  /// 页面结构变化/接口风控返回错误页时必然抛 RangeError/FormatException，
+  /// 而调用方没有 try/catch，用户只能看到空白页且没有失败提示。
+  static Map<String, dynamic>? _extractJson(String html) {
+    try {
+      final String? bodyHtml = parse(html).body?.outerHtml;
+      if (bodyHtml == null) return null;
+      final List<String> scripts = extractScriptContents(bodyHtml);
+      for (final String script in scripts) {
+        final int startIndex = script.indexOf('{');
+        final int endIndex = script.lastIndexOf('};');
+        if (startIndex < 0 || endIndex <= startIndex) continue;
+        try {
+          final dynamic decoded =
+              json.decode(script.substring(startIndex, endIndex + 1));
+          if (decoded is Map<String, dynamic>) return decoded;
+        } catch (_) {
+          continue;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   // 解析专栏 opus格式
   static Future parseArticleOpus({required String id}) async {
     var res = await Request().get('https://www.bilibili.com/opus/$id', extra: {
       'ua': 'pc',
     });
-    String? headContent = parse(res.data).head?.outerHtml;
+    final String html = res.data?.toString() ?? '';
+    if (html.isEmpty) return {'status': false, 'msg': '专栏内容获取失败'};
+    final Map<String, dynamic>? jsonData = _extractJson(html);
+    if (jsonData == null) return {'status': false, 'msg': '专栏内容解析失败'};
+    String? headContent = parse(html).head?.outerHtml;
     var document = parse(headContent);
     var linkTags = document.getElementsByTagName('link');
     bool isCv = false;
@@ -45,19 +75,16 @@ class ReadHttp {
         break;
       }
     }
-    String scriptContent =
-        extractScriptContents(parse(res.data).body!.outerHtml)[0];
-    int startIndex = scriptContent.indexOf('{');
-    int endIndex = scriptContent.lastIndexOf('};');
-    String jsonContent = scriptContent.substring(startIndex, endIndex + 1);
-    // 解析JSON字符串为Map
-    Map<String, dynamic> jsonData = json.decode(jsonContent);
-    return {
-      'status': true,
-      'data': OpusDataModel.fromJson(jsonData),
-      'isCv': isCv,
-      'cvId': cvId,
-    };
+    try {
+      return {
+        'status': true,
+        'data': OpusDataModel.fromJson(jsonData),
+        'isCv': isCv,
+        'cvId': cvId,
+      };
+    } catch (e) {
+      return {'status': false, 'msg': '专栏内容解析失败'};
+    }
   }
 
   // 解析专栏 cv格式
@@ -66,17 +93,18 @@ class ReadHttp {
       'https://www.bilibili.com/read/cv$id',
       extra: {'ua': 'pc'},
     );
-    String scriptContent =
-        extractScriptContents(parse(res.data).body!.outerHtml)[0];
-    int startIndex = scriptContent.indexOf('{');
-    int endIndex = scriptContent.lastIndexOf('};');
-    String jsonContent = scriptContent.substring(startIndex, endIndex + 1);
-    // 解析JSON字符串为Map
-    Map<String, dynamic> jsonData = json.decode(jsonContent);
-    return {
-      'status': true,
-      'data': ReadDataModel.fromJson(jsonData),
-    };
+    final String html = res.data?.toString() ?? '';
+    if (html.isEmpty) return {'status': false, 'msg': '专栏内容获取失败'};
+    final Map<String, dynamic>? jsonData = _extractJson(html);
+    if (jsonData == null) return {'status': false, 'msg': '专栏内容解析失败'};
+    try {
+      return {
+        'status': true,
+        'data': ReadDataModel.fromJson(jsonData),
+      };
+    } catch (e) {
+      return {'status': false, 'msg': '专栏内容解析失败'};
+    }
   }
 
   //

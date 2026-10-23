@@ -4,14 +4,29 @@ import 'dart:isolate';
 class SubTitleUtils {
   // 格式整理
   static Future<String> convertToWebVTT(List jsonData) async {
-    final receivePort = ReceivePort();
-    await Isolate.spawn(_convertToWebVTTIsolate, receivePort.sendPort);
+    Isolate? isolate;
+    ReceivePort? receivePort;
+    ReceivePort? response;
+    try {
+      receivePort = ReceivePort();
+      isolate =
+          await Isolate.spawn(_convertToWebVTTIsolate, receivePort.sendPort);
 
-    final sendPort = await receivePort.first as SendPort;
-    final response = ReceivePort();
-    sendPort.send([jsonData, response.sendPort]);
+      final sendPort = await receivePort.first as SendPort;
+      response = ReceivePort();
+      sendPort.send([jsonData, response.sendPort]);
 
-    return await response.first as String;
+      // 加超时，避免 isolate 内抛异常时 response.first 永不完成 →
+      // 调用方 await 永久卡住（字幕一直加载中）
+      return await response.first
+          .timeout(const Duration(seconds: 15), onTimeout: () => '');
+    } catch (e) {
+      return '';
+    } finally {
+      receivePort?.close();
+      response?.close();
+      isolate?.kill(priority: Isolate.immediate);
+    }
   }
 
   static void _convertToWebVTTIsolate(SendPort sendPort) async {

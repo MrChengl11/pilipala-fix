@@ -175,16 +175,21 @@ class _BangumiPageState extends State<BangumiPage>
               future: _futureBuilderFuture,
               builder: (BuildContext context, AsyncSnapshot snapshot) {
                 if (snapshot.connectionState == ConnectionState.done) {
-                  Map data = snapshot.data as Map;
-                  if (data['status']) {
+                  // snapshot.data 可能为 null（future error 完成），
+                  // 直接 as Map 会抛 "type 'Null' is not a subtype of type 'Map'"
+                  final Map? data = snapshot.data as Map?;
+                  if (data != null && data['status'] == true) {
                     return Obx(() => contentGrid(
                         _bangumidController, _bangumidController.bangumiList));
                   } else {
                     return HttpError(
-                      errMsg: data['msg'],
+                      errMsg: data?['msg'] ?? snapshot.error?.toString(),
                       fn: () {
-                        _futureBuilderFuture =
-                            _bangumidController.queryBangumiListFeed();
+                        // 必须 setState，否则只换 future 不会触发 FutureBuilder 重建
+                        setState(() {
+                          _futureBuilderFuture =
+                              _bangumidController.queryBangumiListFeed();
+                        });
                       },
                     );
                   }

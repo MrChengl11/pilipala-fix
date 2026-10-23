@@ -15,6 +15,8 @@ class LiveController extends GetxController {
   RxList<LiveFollowingItemModel> liveFollowingList =
       <LiveFollowingItemModel>[].obs;
   bool flag = false;
+  bool hasMore = true; // 是否还有下一页
+  bool _isLoading = false; // 防止同一页被并发重复请求
   OverlayEntry? popupDialog;
   Box setting = GStrorage.setting;
 
@@ -29,19 +31,39 @@ class LiveController extends GetxController {
   Future queryLiveList(type) async {
     if (type == 'init') {
       _currentPage = 1;
+      hasMore = true;
+    } else if (!hasMore) {
+      // 已经到底，别再空请求（否则滚到底会无限请求下一页）
+      return {'status': true, 'data': []};
     }
-    var res = await LiveHttp.liveList(
-      pn: _currentPage,
-    );
-    if (res['status']) {
-      if (type == 'init') {
-        liveList.value = res['data'];
-      } else if (type == 'onLoad') {
-        liveList.addAll(res['data']);
+    if (_isLoading) {
+      return {'status': true, 'data': []};
+    }
+    _isLoading = true;
+    try {
+      var res = await LiveHttp.liveList(
+        pn: _currentPage,
+      );
+      if (res['status']) {
+        final List data = res['data'] is List ? res['data'] as List : const [];
+        if (type == 'init') {
+          liveList.value = data.cast<LiveItemModel>().toList();
+        } else if (type == 'onLoad') {
+          if (data.isEmpty) {
+            // 空页即停，避免到底后还在不停请求
+            hasMore = false;
+          } else {
+            liveList.addAll(data.cast<LiveItemModel>());
+            // page_size 是 30，不满一页说明后面没有了
+            if (data.length < 30) hasMore = false;
+          }
+        }
+        _currentPage += 1;
       }
-      _currentPage += 1;
+      return res;
+    } finally {
+      _isLoading = false;
     }
-    return res;
   }
 
   // 下拉刷新
@@ -69,12 +91,14 @@ class LiveController extends GetxController {
   //
   Future fetchLiveFollowing() async {
     var res = await LiveHttp.liveFollowing(pn: 1, ps: 20);
-    if (res['status']) {
-      liveFollowingList.value =
-          (res['data'].list as List<LiveFollowingItemModel>)
-              .where((LiveFollowingItemModel item) =>
-                  item.liveStatus == 1 && item.recordLiveTime == 0) // 根据条件过滤
-              .toList();
+    if (res['status'] && res['data'] != null) {
+      // 模型里 list 允许为 null，直接 as List 会 TypeError
+      final List list = res['data'].list ?? const [];
+      liveFollowingList.value = list
+          .whereType<LiveFollowingItemModel>()
+          .where((LiveFollowingItemModel item) =>
+              item.liveStatus == 1 && item.recordLiveTime == 0) // 根据条件过滤
+          .toList();
     }
     return res;
   }

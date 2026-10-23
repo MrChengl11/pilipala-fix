@@ -107,7 +107,10 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     late MediaItem? mediaItem;
     if (data is VideoDetailData) {
       if ((data.pages?.length ?? 0) > 1) {
-        final current = data.pages?.firstWhere((element) => element.cid == cid);
+        // pages 存在但找不到 cid 时 firstWhere 会抛 StateError
+        final current = data.pages?.firstWhere(
+            (element) => element.cid == cid,
+            orElse: () => data.pages!.first);
         mediaItem = MediaItem(
           id: heroTag,
           title: current?.pagePart ?? "",
@@ -126,8 +129,9 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
         );
       }
     } else if (data is BangumiInfoModel) {
-      final current =
-          data.episodes?.firstWhere((element) => element.cid == cid);
+      final current = data.episodes?.firstWhere(
+          (element) => element.cid == cid,
+          orElse: () => data.episodes!.first);
       mediaItem = MediaItem(
         id: heroTag,
         title: current?.longTitle ?? "",

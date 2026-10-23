@@ -114,6 +114,14 @@ class GlobalDataCache {
         .get(VideoBoxKey.playSpeedSystem, defaultValue: playSpeed);
     speedsList.addAll(playSpeedSystem);
 
+    refreshUserInfo();
+  }
+
+  /// 登录/登出后重新同步用户信息。
+  ///
+  /// userInfo 原来只在 initialize() 里读一次，登录或切换账号后不重启应用
+  /// 就一直是旧值：自己的评论不显示「删除评论」，登出后旧账号评论仍显示删除入口。
+  void refreshUserInfo() {
     userInfo = userInfoCache.get('userInfoCache');
   }
 }

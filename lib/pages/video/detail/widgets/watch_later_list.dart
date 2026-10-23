@@ -58,19 +58,36 @@ class _MediaListPanelState extends State<MediaListPanel> {
   }
 
   void loadMore() async {
-    var res = await UserHttp.getMediaList(
-      type: 3,
-      bizId: widget.mediaId!,
-      ps: 20,
-      oid: mediaList.last.id,
-    );
-    if (res['status']) {
-      if (res['data'].isNotEmpty) {
-        mediaList.addAll(res['data']);
-      }
-    } else {
-      SmartDialog.showToast(res['msg']);
+    // 稍后再看来源没有 mediaId，且列表为空时取不到 oid，均不支持分页
+    final int? mediaId = widget.mediaId;
+    if (mediaId == null || mediaList.isEmpty) {
+      return;
     }
+    try {
+      var res = await UserHttp.getMediaList(
+        type: 3,
+        bizId: mediaId,
+        ps: 20,
+        oid: mediaList.last.id,
+      );
+      if (!mounted) return;
+      if (res['status']) {
+        if (res['data'].isNotEmpty) {
+          mediaList.addAll(res['data']);
+        }
+      } else {
+        SmartDialog.showToast(res['msg']);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      SmartDialog.showToast('加载失败，请稍后重试');
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override

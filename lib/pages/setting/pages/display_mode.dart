@@ -21,8 +21,22 @@ class _SetDiaplayModeState extends State<SetDiaplayMode> {
   final ValueNotifier<int> page = ValueNotifier<int>(0);
   late final PageController controller = PageController()
     ..addListener(() {
-      page.value = controller.page!.round();
+      // page 在 controller 未 attach 时为 null，! 会崩
+      if (!controller.hasClients) return;
+      final double? current = controller.page;
+      if (current != null) {
+        page.value = current.round();
+      }
     });
+
+  @override
+  void dispose() {
+    // 原来既不 dispose PageController 也不 dispose ValueNotifier
+    controller.dispose();
+    page.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();

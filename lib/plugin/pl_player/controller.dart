@@ -697,8 +697,13 @@ class PlPlayerController {
     }
     await _videoPlayerController?.play();
     playerStatus.status.value = PlayerStatus.playing;
-    await getCurrentVolume();
-    await getCurrentBrightness();
+    // 音量/亮度属于系统能力，失败不应中断播放流程
+    try {
+      await getCurrentVolume();
+      await getCurrentBrightness();
+    } catch (e) {
+      debugPrint('$e');
+    }
 
     // screenManager.setOverlays(false);
 
@@ -807,8 +812,8 @@ class PlPlayerController {
     try {
       _currentBrightness.value = await ScreenBrightness().current;
     } catch (e) {
-      throw 'Failed to get current brightness';
-      //return 0;
+      // 部分平台/设备不支持读取屏幕亮度，这里不能抛异常打断播放流程
+      debugPrint('$e');
     }
   }
 
@@ -818,7 +823,8 @@ class PlPlayerController {
       ScreenBrightness().setScreenBrightness(brightnes);
       // setVideoBrightness();
     } catch (e) {
-      throw 'Failed to set brightness';
+      // 亮度调节失败时仅记录，避免手势层抛出未捕获异常
+      debugPrint('$e');
     }
   }
 
@@ -826,7 +832,8 @@ class PlPlayerController {
     try {
       await ScreenBrightness().resetScreenBrightness();
     } catch (e) {
-      throw 'Failed to reset brightness';
+      // dispose 阶段调用，异常不能外抛
+      debugPrint('$e');
     }
   }
 
@@ -940,9 +947,11 @@ class PlPlayerController {
   Future<void> triggerFullScreen({bool status = true}) async {
     FullScreenMode mode = FullScreenModeCode.fromCode(
         setting.get(SettingBoxKey.fullScreenMode, defaultValue: 0))!;
-    await StatusBarControl.setHidden(true, animation: StatusBarAnimation.FADE);
     if (!isFullScreen.value && status) {
       /// 按照视频宽高比决定全屏方向
+      // 只有真正进入全屏时才隐藏状态栏，否则非全屏时调用会留下隐藏状态栏
+      await StatusBarControl.setHidden(true,
+          animation: StatusBarAnimation.FADE);
       toggleFullScreen(true);
 
       /// 进入全屏

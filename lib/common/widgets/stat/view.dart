@@ -6,11 +6,15 @@ class StatView extends StatelessWidget {
   final dynamic view;
   final String? size;
 
+  /// 为 true 时内部 Text 允许省略号收缩（窄卡片如 3 列以上使用）
+  final bool overflow;
+
   const StatView({
     Key? key,
     this.theme = 'gray',
     this.view,
     this.size,
+    this.overflow = false,
   }) : super(key: key);
 
   @override
@@ -23,9 +27,10 @@ class StatView extends StatelessWidget {
     Color color = colorObject[theme]!;
     return StatIconText(
       icon: Icons.play_circle_outlined,
-      text: Utils.numFormat(view!),
+      text: Utils.numFormat(view ?? 0),
       color: color,
       size: size,
+      overflow: overflow,
     );
   }
 }
@@ -36,17 +41,32 @@ class StatIconText extends StatelessWidget {
   final Color color;
   final String? size;
 
+  /// 为 true 时文本可被压缩并显示省略号
+  final bool overflow;
+
   const StatIconText({
     Key? key,
     required this.icon,
     required this.text,
     required this.color,
     this.size,
+    this.overflow = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final Widget textWidget = Text(
+      text,
+      maxLines: 1,
+      softWrap: false,
+      overflow: overflow ? TextOverflow.ellipsis : null,
+      style: TextStyle(
+        fontSize: size == 'medium' ? 12 : 11,
+        color: color,
+      ),
+    );
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           icon,
@@ -54,13 +74,7 @@ class StatIconText extends StatelessWidget {
           color: color,
         ),
         const SizedBox(width: 2),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: size == 'medium' ? 12 : 11,
-            color: color,
-          ),
-        ),
+        overflow ? Flexible(child: textWidget) : textWidget,
       ],
     );
   }

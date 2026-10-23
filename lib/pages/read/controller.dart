@@ -29,8 +29,12 @@ class ReadPageController extends GetxController {
   Future fetchCvData() async {
     var res = await ReadHttp.parseArticleCv(id: id);
     if (res['status']) {
-      cvData.value = res['data'];
-      title.value = cvData.value.readInfo!.title!;
+      try {
+        cvData.value = res['data'];
+        title.value = cvData.value.readInfo?.title ?? title.value;
+      } catch (e) {
+        return {'status': false, 'msg': '专栏内容解析失败'};
+      }
     }
     return res;
   }

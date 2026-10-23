@@ -27,6 +27,9 @@ class _LogsPageState extends State<LogsPage> {
     logsPath = await getLogsPath();
     fileContent = await logsPath.readAsString();
     logsContent = await parseLogs(fileContent);
+    // 异步返回时页面可能已经 pop，直接 setState 会抛
+    // "setState() called after dispose()"
+    if (!mounted) return;
     setState(() {});
   }
 

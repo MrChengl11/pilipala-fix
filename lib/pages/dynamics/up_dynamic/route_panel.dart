@@ -51,6 +51,12 @@ class _OverlayPanelState extends State<OverlayPanel>
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       int index =
           upList.indexWhere((element) => element.mid == widget.upInfo.mid);
+      // widget.upInfo 可能正是被 removeAt(0) 移除的「全部动态」(mid = -1)，
+      // 此时 indexWhere 返回 -1，直接 jumpToPage(-1)/upList[-1] 会 RangeError
+      if (index < 0) {
+        if (mounted) setState(() {});
+        return;
+      }
       pageController.jumpToPage(index);
       onClickUp(widget.upInfo, index);
       _tabController?.animateTo(index,

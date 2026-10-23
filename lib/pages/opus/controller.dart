@@ -38,8 +38,13 @@ class OpusController extends GetxController {
           'articleType': 'cv',
         });
       } else {
-        title.value = res['data'].detail!.basic!.title!;
-        opusData.value = res['data'];
+        // detail/basic/title 任一为 null 时原来的 ! 会崩，且这里没有 catch
+        try {
+          title.value = res['data']?.detail?.basic?.title ?? title.value;
+          opusData.value = res['data'];
+        } catch (e) {
+          return {'status': false, 'msg': '专栏内容解析失败'};
+        }
       }
     }
     return res;

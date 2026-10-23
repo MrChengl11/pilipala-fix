@@ -67,54 +67,68 @@ class VideoReplyController extends GetxController {
       isLoadingMore = false;
       return;
     }
-    final res = await ReplyHttp.replyList(
-      oid: aid!,
-      pageNum: currentPage + 1,
-      ps: ps,
-      type: ReplyType.video.index,
-      sort: _sortType.index,
-    );
-    if (reqSeq != _reqSeq) {
-      // 已发起更新的请求（如切换排序），丢弃本次过期响应；isLoadingMore 由新请求负责复位
-      return res;
-    }
-    if (res['status']) {
-      final List<ReplyItemModel> replies = res['data'].replies;
-      if (replies.isNotEmpty) {
-        noMore.value = '加载中...';
-
-        /// 第一页回复数小于20
-        if (currentPage == 0 && replies.length < 18) {
-          noMore.value = '没有更多了';
-        }
-        currentPage++;
-
-        if (replyList.length == res['data'].page.acount) {
-          noMore.value = '没有更多了';
-        }
-      } else {
-        // 未登录状态replies可能返回null
-        noMore.value = currentPage == 0 ? '还没有评论' : '没有更多了';
+    try {
+      final res = await ReplyHttp.replyList(
+        oid: aid!,
+        pageNum: currentPage + 1,
+        ps: ps,
+        type: ReplyType.video.index,
+        sort: _sortType.index,
+      );
+      if (reqSeq != _reqSeq) {
+        // 已发起更新的请求（如切换排序），丢弃本次过期响应；isLoadingMore 由新请求负责复位
+        return res;
       }
-      if (type == 'init') {
-        // 添加置顶回复
-        if (res['data'].upper.top != null) {
-          final bool flag = res['data'].topReplies.any((ReplyItemModel reply) =>
-              reply.rpid == res['data'].upper.top.rpid) as bool;
-          if (!flag) {
-            replies.insert(0, res['data'].upper.top);
+      if (res['status']) {
+        final List<ReplyItemModel> replies = res['data'].replies;
+        if (replies.isNotEmpty) {
+          noMore.value = '加载中...';
+
+          /// 第一页回复数小于20
+          if (currentPage == 0 && replies.length < 18) {
+            noMore.value = '没有更多了';
           }
+          currentPage++;
+
+          if (replyList.length == res['data'].page?.acount) {
+            noMore.value = '没有更多了';
+          }
+        } else {
+          // 未登录状态replies可能返回null
+          noMore.value = currentPage == 0 ? '还没有评论' : '没有更多了';
         }
-        replies.insertAll(0, res['data'].topReplies);
-        count.value = res['data'].page.count;
-        replyList.value = replies;
-      } else {
-        replyList.addAll(replies);
+        if (type == 'init') {
+          // 添加置顶回复
+          if (res['data'].upper.top != null) {
+            final bool flag = res['data'].topReplies.any(
+                (ReplyItemModel reply) =>
+                    reply.rpid == res['data'].upper.top.rpid) as bool;
+            if (!flag) {
+              replies.insert(0, res['data'].upper.top);
+            }
+          }
+          replies.insertAll(0, res['data'].topReplies);
+          count.value = res['data'].page?.count ?? 0;
+          replyList.value = replies;
+        } else {
+          replyList.addAll(replies);
+        }
+      }
+      replyReqCode.value = res['code'];
+      return res;
+    } catch (e) {
+      // 网络/接口异常：返回失败结构让 UI 显示错误并可重试，避免 isLoadingMore 永久卡死
+      return {
+        'status': false,
+        'code': -1,
+        'msg': '评论加载失败，请稍后重试',
+      };
+    } finally {
+      // 只有当前请求的拥有者才复位，避免覆盖新一轮请求的加载状态
+      if (reqSeq == _reqSeq) {
+        isLoadingMore = false;
       }
     }
-    replyReqCode.value = res['code'];
-    isLoadingMore = false;
-    return res;
   }
 
   // 上拉加载

@@ -76,6 +76,14 @@ Widget picWidget(item, context) {
         if (origAspectRatio < 0.5 || pictures.first.width < 1920) {
           crossCount = 2;
           height = maxWidth / 2 / aspectRatio;
+        } else {
+          // 高清横图（原宽 >= 1920 且比例 >= 0.5）：整宽展示
+          // 原代码此处未给 height 赋值，保持 0.0 导致图片被 clip 裁没
+          crossCount = 1;
+          height = maxWidth / aspectRatio;
+        }
+        if (height <= 0) {
+          height = maxWidth / (aspectRatio > 0 ? aspectRatio : 1.0);
         }
       } else {
         aspectRatio = 1;

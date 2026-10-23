@@ -1,5 +1,6 @@
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/skeleton/video_card_h.dart';
 import 'package:pilipala/common/widgets/http_error.dart';
@@ -72,8 +73,16 @@ class _FavPageState extends State<FavPage> {
                 )
               : const SizedBox.shrink()),
           IconButton(
-            onPressed: () => Get.toNamed(
-                '/favSearch?searchType=1&mediaId=${_favController.favFolderData.value.list!.first.id}'),
+            onPressed: () {
+              // 收藏夹列表未加载完成或为空时 list 为 null / 空列表
+              final list = _favController.favFolderData.value.list;
+              if (list == null || list.isEmpty) {
+                SmartDialog.showToast('暂无收藏夹');
+                return;
+              }
+              Get.toNamed(
+                  '/favSearch?searchType=1&mediaId=${list.first.id}');
+            },
             icon: const Icon(Icons.search_outlined),
           ),
           const SizedBox(width: 14),

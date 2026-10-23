@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -20,26 +22,28 @@ class _HistoryPageState extends State<HistoryPage> {
   final HistoryController _historyController = Get.put(HistoryController());
   Future? _futureBuilderFuture;
   late ScrollController scrollController;
+  // 存成字段，dispose 时才能真的移除/取消
+  VoidCallback? _scrollListener;
+  StreamSubscription<bool>? _enableMultipleSub;
 
   @override
   void initState() {
     _futureBuilderFuture = _historyController.queryHistoryList();
     super.initState();
     scrollController = _historyController.scrollController;
-    scrollController.addListener(
-      () {
-        if (scrollController.position.pixels >=
-            scrollController.position.maxScrollExtent - 300) {
-          if (!_historyController.isLoadingMore.value) {
-            EasyThrottle.throttle('history', const Duration(seconds: 1), () {
-              _historyController.onLoad();
-            });
-          }
+    _scrollListener = () {
+      if (scrollController.position.pixels >=
+          scrollController.position.maxScrollExtent - 300) {
+        if (!_historyController.isLoadingMore.value) {
+          EasyThrottle.throttle('history', const Duration(seconds: 1), () {
+            _historyController.onLoad();
+          });
         }
-      },
-    );
-    _historyController.enableMultiple.listen((p0) {
-      setState(() {});
+      }
+    };
+    scrollController.addListener(_scrollListener!);
+    _enableMultipleSub = _historyController.enableMultiple.listen((p0) {
+      if (mounted) setState(() {});
     });
   }
 
@@ -59,7 +63,12 @@ class _HistoryPageState extends State<HistoryPage> {
 
   @override
   void dispose() {
-    scrollController.removeListener(() {});
+    if (_scrollListener != null) {
+      scrollController.removeListener(_scrollListener!);
+      _scrollListener = null;
+    }
+    // 原来 enableMultiple.listen 的订阅从不取消，页面退出后仍在 setState
+    _enableMultipleSub?.cancel();
     super.dispose();
   }
 

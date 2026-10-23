@@ -129,8 +129,10 @@ class FavDetailController extends GetxController {
         'privacy': [23, 1].contains(item!.attr) ? 1 : 0,
       },
     );
-    title.value = res['title'];
-    print(title);
+    // 在编辑页直接返回（取消）时 Get.toNamed 结果为 null
+    if (res is Map && res['title'] is String) {
+      title.value = res['title'];
+    }
   }
 
   Future toViewPlayAll() async {

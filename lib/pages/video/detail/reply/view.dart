@@ -259,7 +259,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                     } else {
                       // 请求错误
                       return HttpError(
-                        errMsg: data['msg'],
+                        errMsg: data?['msg'] ?? '评论加载失败，请稍后重试',
                         fn: () {
                           setState(() {
                             _futureBuilderFuture =

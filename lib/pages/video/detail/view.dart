@@ -226,6 +226,28 @@ class _VideoDetailPageState extends State<VideoDetailPage>
     });
   }
 
+  /// 上次已应用过的沉浸式状态（null 表示需要在下次 build 重新应用）
+  bool? _appliedImmersive;
+  bool _immersiveScheduled = false;
+
+  /// build 中直接调用 enter/exitFullScreen 会在每次重建时触发平台调用
+  /// （exitFullScreen 还会改写全局方向限制）。这里做去重并放到帧后执行。
+  void _applyImmersiveUi(bool immersive) {
+    if (_appliedImmersive == immersive) return;
+    _appliedImmersive = immersive;
+    if (_immersiveScheduled) return;
+    _immersiveScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _immersiveScheduled = false;
+      if (!mounted) return;
+      if (_appliedImmersive == true) {
+        enterFullScreen();
+      } else {
+        exitFullScreen();
+      }
+    });
+  }
+
   getStatusHeight() async {
     statusHeight = await StatusBarControl.getHeight;
   }
@@ -308,6 +330,8 @@ class _VideoDetailPageState extends State<VideoDetailPage>
     }
     plPlayerController?.addStatusLister(playerListener);
     appbarStream.add(0);
+    // 从子页面返回后重新应用一次系统栏/方向状态
+    _appliedImmersive = null;
     super.didPopNext();
   }
 
@@ -517,13 +541,14 @@ class _VideoDetailPageState extends State<VideoDetailPage>
     final bool isLandscape = _context.orientation == Orientation.landscape;
     final Rx<bool> isFullScreen = plPlayerController?.isFullScreen ?? false.obs;
     // 全屏时高度撑满
-    if (isLandscape || isFullScreen.value == true) {
+    final bool immersive = isLandscape || isFullScreen.value == true;
+    if (immersive) {
       videoHeight.value = Get.size.height;
-      enterFullScreen();
     } else {
       videoHeight.value = defaultVideoHeight;
-      exitFullScreen();
     }
+    // build 里不能每次都调用系统栏/方向接口：这里只在状态变化时帧后执行一次
+    _applyImmersiveUi(immersive);
 
     Widget buildLoadingWidget() {
       return Center(child: Lottie.asset('assets/loading.json', width: 200));

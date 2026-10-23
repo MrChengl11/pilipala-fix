@@ -26,6 +26,8 @@ class _LivePageState extends State<LivePage>
   late Future _futureBuilderFuture;
   late Future _futureBuilderFuture2;
   late ScrollController scrollController;
+  // 存成字段，dispose 时才能真正移除（原来的 removeListener(() {}) 是空函数）
+  VoidCallback? _scrollListener;
 
   @override
   bool get wantKeepAlive => true;
@@ -36,23 +38,25 @@ class _LivePageState extends State<LivePage>
     _futureBuilderFuture = _liveController.queryLiveList('init');
     _futureBuilderFuture2 = _liveController.fetchLiveFollowing();
     scrollController = _liveController.scrollController;
-    scrollController.addListener(
-      () {
-        if (scrollController.position.pixels >=
-            scrollController.position.maxScrollExtent - 200) {
-          EasyThrottle.throttle('liveList', const Duration(milliseconds: 200),
-              () {
-            _liveController.onLoad();
-          });
-        }
-        handleScrollEvent(scrollController);
-      },
-    );
+    _scrollListener = () {
+      if (scrollController.position.pixels >=
+          scrollController.position.maxScrollExtent - 200) {
+        EasyThrottle.throttle('liveList', const Duration(milliseconds: 200),
+            () {
+          _liveController.onLoad();
+        });
+      }
+      handleScrollEvent(scrollController);
+    };
+    scrollController.addListener(_scrollListener!);
   }
 
   @override
   void dispose() {
-    scrollController.removeListener(() {});
+    if (_scrollListener != null) {
+      scrollController.removeListener(_scrollListener!);
+      _scrollListener = null;
+    }
     super.dispose();
   }
 

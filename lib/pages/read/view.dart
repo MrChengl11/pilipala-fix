@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/widgets/html_render.dart';
+import 'package:pilipala/common/widgets/http_error.dart';
 import 'package:pilipala/common/widgets/network_img_layer.dart';
 import 'package:pilipala/models/read/opus.dart';
 import 'package:pilipala/models/read/read.dart';
@@ -108,8 +109,17 @@ class _ReadPageState extends State<ReadPage> {
       future: _futureBuilderFuture,
       builder: (BuildContext context, AsyncSnapshot snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
+          // 接口异常 / 解析失败时 snapshot.data 为 null，
+          // 原代码返回空 SizedBox 导致整页白屏无提示、无法重试
           if (snapshot.data == null) {
-            return const SizedBox();
+            return HttpError(
+              errMsg: snapshot.error?.toString(),
+              fn: () {
+                setState(() {
+                  _futureBuilderFuture = controller.fetchCvData();
+                });
+              },
+            );
           }
           if (snapshot.data['status']) {
             return _buildContent(snapshot.data['data']);

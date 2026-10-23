@@ -224,8 +224,10 @@ class Api {
 
   // 直播
   // ?page=1&page_size=30&platform=web
+  // 注：原 /xlive/web-interface/v1/second/getUserRecommend 已被风控（恒返回 -352），
+  //     改用 /room/v1/room/get_user_recommend，返回结构与 LiveItemModel 兼容。
   static const String liveList =
-      '${HttpString.liveBaseUrl}/xlive/web-interface/v1/second/getUserRecommend';
+      '${HttpString.liveBaseUrl}/room/v1/room/get_user_recommend';
 
   // 直播间详情
   // cid roomId

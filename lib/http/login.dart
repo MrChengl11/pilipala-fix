@@ -18,7 +18,12 @@ class LoginHttp {
         'data': CaptchaDataModel.fromJson(res.data['data']),
       };
     } else {
-      return {'status': false, 'data': res.message};
+      // dio Response 没有 message getter，原来这里会抛异常，
+      // 导致登录页 loading 框永远不消失
+      return {
+        'status': false,
+        'msg': res.data?['message']?.toString() ?? '验证码获取失败',
+      };
     }
   }
 

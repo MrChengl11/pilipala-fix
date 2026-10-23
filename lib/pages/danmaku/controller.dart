@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:pilipala/http/danmaku.dart';
 import 'package:pilipala/models/danmaku/dm.pb.dart';
 
@@ -35,9 +36,16 @@ class PlDanmakuController {
   }
 
   void queryDanmaku(int segmentIndex) async {
-    assert(requestedSeg[segmentIndex] == false);
-    if (requestedSeg.length > segmentIndex) {
-      requestedSeg[segmentIndex] = true;
+    // 视频时长未知（duration 为 0）或进度超出已知段落数时，
+    // requestedSeg 为空/越界，直接下标访问会 RangeError。
+    if (segmentIndex < 0 || segmentIndex >= requestedSeg.length) {
+      return;
+    }
+    if (requestedSeg[segmentIndex]) {
+      return;
+    }
+    requestedSeg[segmentIndex] = true;
+    try {
       final DmSegMobileReply result = await DanmakaHttp.queryDanmaku(
           cid: cid, segmentIndex: segmentIndex + 1);
       if (result.elems.isNotEmpty) {
@@ -49,11 +57,21 @@ class PlDanmakuController {
           dmSegMap[pos]!.add(element);
         }
       }
+    } catch (e) {
+      // 网络异常时避免未捕获的异步异常，允许下次进入该段时重试
+      requestedSeg[segmentIndex] = false;
+      debugPrint('$e');
     }
   }
 
   List<DanmakuElem>? getCurrentDanmaku(int progress) {
+    if (requestedSeg.isEmpty) {
+      return null;
+    }
     int segmentIndex = calcSegment(progress);
+    if (segmentIndex < 0 || segmentIndex >= requestedSeg.length) {
+      return null;
+    }
     if (!requestedSeg[segmentIndex]) {
       queryDanmaku(segmentIndex);
     }

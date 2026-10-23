@@ -208,20 +208,29 @@ class VideoContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           // 行高统一收紧（height: 1.15~1.25），让 4 行内容刚好填满
           // 与封面等高的卡片；Spacer 换成固定 gap，避免大屏把内容拉散。
-          mainAxisSize: MainAxisSize.min,
+          // 注意不能再用 MainAxisSize.min + Flexible 标题：Column 在
+          // 有界高度下会先按「尽量小」布局，Flexible 子项被压到 0，
+          // 第二行标题会被硬裁掉（稍后再看/搜索结果里标题下半截消失）。
+          mainAxisSize: MainAxisSize.max,
           children: [
             if (source == 'normal' || source == 'later') ...[
-              Flexible(
-                child: Text(
-                  videoItem.title as String,
-                  textAlign: TextAlign.start,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+              // 标题最多 2 行，空间不足时省略号收尾，绝不硬裁。
+              // 注意：这里不能用 FittedBox(BoxFit.scaleDown) 包 Text ——
+              // FittedBox 会以「无限约束」测量子级，子级一旦是
+              // SizedBox(width: double.infinity) 就抛
+              // "BoxConstraints forces an infinite width"，直接让
+              // 整个列表（排行榜/搜索/稍后再看）布局失败变白屏。
+              // 列高已由 StyleString.horizontalContentExtent 兜底，
+              // maxLines + ellipsis 足以保证不溢出。
+              Text(
+                videoItem.title as String,
+                textAlign: TextAlign.start,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  height: 1.2,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ] else ...[
               RichText(

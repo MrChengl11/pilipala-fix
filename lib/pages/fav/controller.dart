@@ -22,9 +22,10 @@ class FavController extends GetxController {
 
   @override
   void onInit() {
-    mid = int.parse(Get.parameters['mid'] ?? '-1');
+    // 参数可能非数字，userInfo.mid 可能为空，都不应抛异常
+    mid = int.tryParse(Get.parameters['mid'] ?? '-1') ?? -1;
     userInfo = userInfoCache.get('userInfoCache');
-    ownerMid = userInfo != null ? userInfo!.mid! : -1;
+    ownerMid = userInfo?.mid ?? -1;
     isOwner.value = mid == -1 || mid == ownerMid;
     super.onInit();
   }

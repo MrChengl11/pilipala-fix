@@ -35,7 +35,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
   late AnimationController fabAnimationCtr;
   bool _shouldAutoScroll = true;
   StreamSubscription? _msgListSub;
-  final int roomId = int.parse(Get.parameters['roomid']!);
+  final int roomId = int.tryParse(Get.parameters['roomid'] ?? '') ?? 0;
 
   @override
   void initState() {
@@ -138,7 +138,47 @@ class _LiveRoomPageState extends State<LiveRoomPage>
             ),
           );
         } else {
-          return const SizedBox();
+          // 直播间信息/播放流获取失败（未开播、接口风控、网络异常等）时，
+          // 原来直接返回 SizedBox() 导致整片黑屏且没有任何提示与重试入口。
+          final String errMsg =
+              (snapshot.data is Map && snapshot.data['msg'] != null)
+                  ? snapshot.data['msg'].toString()
+                  : '直播间信息获取失败';
+          return Container(
+            color: Colors.black,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.live_tv_rounded,
+                    color: Colors.white54, size: 40),
+                const SizedBox(height: 12),
+                Text(
+                  errMsg,
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _futureBuilderFuture = _liveRoomController.queryLiveInfo();
+                    });
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white38),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  ),
+                  child: const Text('点击重试'),
+                ),
+              ],
+            ),
+          );
         }
       },
     );
@@ -274,40 +314,40 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                   }
                   Map data = snapshot.data as Map;
                   if (data['status']) {
-                    return Obx(
-                      () => Row(
+                    return Obx(() {
+                      // H5 接口成功但 anchor_info/base_info 缺失时，
+                      // 原来的 anchorInfo!.baseInfo!.face 会直接 null check 崩溃
+                      final dynamic baseInfo = _liveRoomController
+                          .roomInfoH5.value.anchorInfo?.baseInfo;
+                      final Map? watchedShow =
+                          _liveRoomController.roomInfoH5.value.watchedShow;
+                      return Row(
                         children: [
                           NetworkImgLayer(
                             width: 34,
                             height: 34,
                             type: 'avatar',
-                            src: _liveRoomController
-                                .roomInfoH5.value.anchorInfo!.baseInfo!.face,
+                            src: baseInfo?.face,
                           ),
                           const SizedBox(width: 10),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _liveRoomController.roomInfoH5.value.anchorInfo!
-                                    .baseInfo!.uname!,
+                                baseInfo?.uname ?? '',
                                 style: const TextStyle(fontSize: 14),
                               ),
                               const SizedBox(height: 1),
-                              if (_liveRoomController
-                                      .roomInfoH5.value.watchedShow !=
-                                  null)
+                              if (watchedShow != null)
                                 Text(
-                                  _liveRoomController.roomInfoH5.value
-                                          .watchedShow!['text_large'] ??
-                                      '',
+                                  watchedShow['text_large'] ?? '',
                                   style: const TextStyle(fontSize: 12),
                                 ),
                             ],
                           ),
                         ],
-                      ),
-                    );
+                      );
+                    });
                   } else {
                     return const SizedBox();
                   }
@@ -438,84 +478,82 @@ Widget buildMessageListUI(
   LiveRoomController liveRoomController,
   ScrollController scrollController,
 ) {
-  return Expanded(
-    child: Obx(
-      () => MediaQuery.removePadding(
-        context: context,
-        removeTop: true,
-        removeBottom: true,
-        child: ShaderMask(
-          shaderCallback: (Rect bounds) {
-            return LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                Colors.black.withOpacity(0.5),
-                Colors.black,
-              ],
-              stops: const [0.01, 0.05, 0.2],
-            ).createShader(bounds);
+  return Obx(
+    () => MediaQuery.removePadding(
+      context: context,
+      removeTop: true,
+      removeBottom: true,
+      child: ShaderMask(
+        shaderCallback: (Rect bounds) {
+          return LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.transparent,
+              Colors.black.withOpacity(0.5),
+              Colors.black,
+            ],
+            stops: const [0.01, 0.05, 0.2],
+          ).createShader(bounds);
+        },
+        blendMode: BlendMode.dstIn,
+        child: GestureDetector(
+          onTap: () {
+            // 键盘失去焦点
+            FocusScope.of(context).requestFocus(FocusNode());
           },
-          blendMode: BlendMode.dstIn,
-          child: GestureDetector(
-            onTap: () {
-              // 键盘失去焦点
-              FocusScope.of(context).requestFocus(FocusNode());
-            },
-            child: ListView.builder(
-              controller: scrollController,
-              itemCount: liveRoomController.messageList.length,
-              itemBuilder: (context, index) {
-                final LiveMessageModel liveMsgItem =
-                    liveRoomController.messageList[index];
-                return Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: liveRoomController.isPortrait.value
-                          ? Colors.black.withOpacity(0.3)
-                          : Colors.grey.withOpacity(0.1),
-                      borderRadius: const BorderRadius.all(Radius.circular(20)),
-                    ),
-                    margin: EdgeInsets.only(
-                      top: index == 0 ? 20.0 : 0.0,
-                      bottom: 6.0,
-                      left: 14.0,
-                      right: 14.0,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 3.0,
-                      horizontal: 10.0,
-                    ),
-                    child: Text.rich(
-                      TextSpan(
-                        style: const TextStyle(color: Colors.white),
-                        children: [
-                          TextSpan(
-                            text: '${liveMsgItem.userName}: ',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                            ),
-                            recognizer: TapGestureRecognizer()
-                              ..onTap = () {
-                                // 处理点击事件
-                                print('Text clicked');
-                              },
+          child: ListView.builder(
+            controller: scrollController,
+            itemCount: liveRoomController.messageList.length,
+            itemBuilder: (context, index) {
+              final LiveMessageModel liveMsgItem =
+                  liveRoomController.messageList[index];
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: liveRoomController.isPortrait.value
+                        ? Colors.black.withOpacity(0.3)
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: const BorderRadius.all(Radius.circular(20)),
+                  ),
+                  margin: EdgeInsets.only(
+                    top: index == 0 ? 20.0 : 0.0,
+                    bottom: 6.0,
+                    left: 14.0,
+                    right: 14.0,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 3.0,
+                    horizontal: 10.0,
+                  ),
+                  child: Text.rich(
+                    TextSpan(
+                      style: const TextStyle(color: Colors.white),
+                      children: [
+                        TextSpan(
+                          text: '${liveMsgItem.userName}: ',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.6),
                           ),
-                          TextSpan(
-                            children: [
-                              ...buildMessageTextSpan(context, liveMsgItem)
-                            ],
-                            // text: liveMsgItem.message,
-                          ),
-                        ],
-                      ),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () {
+                              // 处理点击事件
+                              print('Text clicked');
+                            },
+                        ),
+                        TextSpan(
+                          children: [
+                            ...buildMessageTextSpan(context, liveMsgItem)
+                          ],
+                          // text: liveMsgItem.message,
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -548,10 +586,11 @@ List<InlineSpan> buildMessageTextSpan(
           inlineSpanList.add(
             WidgetSpan(
               child: NetworkImgLayer(
-                width: emoteItem['width'].toDouble(),
-                height: emoteItem['height'].toDouble(),
+                // 接口里 width/height 可能是 null 或字符串，直接 toDouble 会崩
+                width: double.tryParse('${emoteItem['width'] ?? ''}') ?? 20,
+                height: double.tryParse('${emoteItem['height'] ?? ''}') ?? 20,
                 type: 'emote',
-                src: emoteItem['url'],
+                src: emoteItem['url'] is String ? emoteItem['url'] : null,
               ),
             ),
           );

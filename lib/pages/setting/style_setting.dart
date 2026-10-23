@@ -5,6 +5,8 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:pilipala/models/common/theme_type.dart';
+import 'package:pilipala/pages/live/controller.dart';
+import 'package:pilipala/pages/rcmd/controller.dart';
 import 'package:pilipala/pages/setting/pages/color_select.dart';
 import 'package:pilipala/pages/setting/widgets/select_dialog.dart';
 import 'package:pilipala/pages/setting/widgets/slide_dialog.dart';
@@ -124,7 +126,15 @@ class _StyleSettingState extends State<StyleSetting> {
               if (result != null) {
                 defaultCustomRows = result;
                 setting.put(SettingBoxKey.customRows, result);
-                setState(() {});
+                // 已创建的首页/直播控制器是常驻实例，只改 hive 不会触发重建，
+                // 这里同步刷新它们的列数，避免必须重启 app 才生效。
+                if (Get.isRegistered<RcmdController>()) {
+                  Get.find<RcmdController>().crossAxisCount.value = result;
+                }
+                if (Get.isRegistered<LiveController>()) {
+                  Get.find<LiveController>().crossAxisCount.value = result;
+                }
+                if (mounted) setState(() {});
               }
             },
             dense: false,
@@ -142,8 +152,8 @@ class _StyleSettingState extends State<StyleSetting> {
                 builder: (context) {
                   return StatefulBuilder(
                     builder: (context, StateSetter setState) {
-                      final SettingController settingController =
-                          Get.put(SettingController());
+                      // 对话框里用临时值：点「取消」不再把未保存的值写回页面字段
+                      int tempQuality = picQuality;
                       return AlertDialog(
                         title: const Text('图片质量'),
                         contentPadding: const EdgeInsets.only(
@@ -151,14 +161,15 @@ class _StyleSettingState extends State<StyleSetting> {
                         content: SizedBox(
                           height: 40,
                           child: Slider(
-                            value: picQuality.toDouble(),
+                            value: tempQuality.toDouble(),
                             min: 10,
                             max: 100,
                             divisions: 9,
-                            label: '$picQuality%',
+                            label: '$tempQuality%',
                             onChanged: (double val) {
-                              picQuality = val.toInt();
-                              setState(() {});
+                              setState(() {
+                                tempQuality = val.toInt();
+                              });
                             },
                           ),
                         ),
@@ -172,6 +183,7 @@ class _StyleSettingState extends State<StyleSetting> {
                                           .outline))),
                           TextButton(
                             onPressed: () {
+                              picQuality = tempQuality;
                               setting.put(
                                   SettingBoxKey.defaultPicQa, picQuality);
                               Get.back();

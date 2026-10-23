@@ -101,7 +101,9 @@ class _PlaySpeedPageState extends State<PlaySpeedPage> {
                   ),
                 ),
                 onChanged: (e) {
-                  customSpeed = double.parse(e);
+                  // 清空输入框或只输入 "." / "-" 时 double.parse 会抛
+                  // FormatException（debug 直接红屏），这里容错
+                  customSpeed = double.tryParse(e) ?? customSpeed;
                 },
               ),
             ],
@@ -183,7 +185,9 @@ class _PlaySpeedPageState extends State<PlaySpeedPage> {
       late List speedsList =
           type == 'system' ? playSpeedSystem : customSpeedsList;
       if (speedsList[index] == playSpeedDefault) {
+        // 缺少 return：原来提示"不可删除"之后仍旧 removeAt，提示自相矛盾
         SmartDialog.showToast('默认倍速不可删除');
+        return;
       }
       if (speedsList[index] == longPressSpeedDefault) {
         longPressSpeedDefault = 2.0;

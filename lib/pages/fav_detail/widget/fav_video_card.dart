@@ -169,7 +169,7 @@ class VideoContent extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0.3,
                   ),
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (videoItem.ogv != null) ...[
@@ -185,6 +185,8 @@ class VideoContent extends StatelessWidget {
                 const Spacer(),
                 Text(
                   Utils.dateFormat(videoItem.favTime),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(context).colorScheme.outline),
@@ -192,6 +194,8 @@ class VideoContent extends StatelessWidget {
                 if (videoItem.owner.name != '') ...[
                   Text(
                     videoItem.owner.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize:
                           Theme.of(context).textTheme.labelMedium!.fontSize,
@@ -203,9 +207,18 @@ class VideoContent extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 2),
                   child: Row(
                     children: [
-                      StatView(view: videoItem.cntInfo['play']),
-                      const SizedBox(width: 8),
-                      StatDanMu(danmu: videoItem.cntInfo['danmaku']),
+                      Flexible(
+                        flex: 3,
+                        child: StatView(
+                            view: videoItem.cntInfo['play'], overflow: true),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        flex: 2,
+                        child: StatDanMu(
+                            danmu: videoItem.cntInfo['danmaku'],
+                            overflow: true),
+                      ),
                       const Spacer(),
                     ],
                   ),

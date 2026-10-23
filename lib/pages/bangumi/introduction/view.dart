@@ -147,7 +147,9 @@ class _BangumiInfoState extends State<BangumiInfo> {
 
   // 收藏
   showFavBottomSheet() {
-    if (bangumiIntroController.userInfo.mid == null) {
+    // 未登录时 userInfo 本身为 null，直接取 .mid 会抛 NoSuchMethodError
+    if (bangumiIntroController.userInfo == null ||
+        bangumiIntroController.userInfo.mid == null) {
       SmartDialog.showToast('账号未登录');
       return;
     }

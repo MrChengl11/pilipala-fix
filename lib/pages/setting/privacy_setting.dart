@@ -58,6 +58,8 @@ class _PrivacySettingState extends State<PrivacySetting> {
             onTap: () {
               if (!userLogin) {
                 SmartDialog.showToast('请先登录');
+                // 缺 return：未登录也会去刷新 access_key
+                return;
               }
               MemberHttp.cookieToKey();
             },

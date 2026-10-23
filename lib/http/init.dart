@@ -99,10 +99,12 @@ class Request {
     buvid = buvidCookies.isNotEmpty ? buvidCookies.first.value : null;
     if (buvid == null || buvid!.isEmpty) {
       try {
-        var result = await Request().get(
+        // Request().get 返回的是 dio Response，不是 Map，
+        // 直接 result["data"] 会 NoSuchMethodError 被 catch 吞掉，buvid 恒为空
+        final Response result = await Request().get(
           "${HttpString.apiBaseUrl}/x/frontend/finger/spi",
         );
-        buvid = result["data"]["b_3"].toString();
+        buvid = result.data['data']?['b_3']?.toString() ?? '';
       } catch (e) {
         // 处理请求错误
         buvid = '';

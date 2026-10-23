@@ -290,21 +290,34 @@ class VideoStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 窄卡片（3 列及以上）时一行放不下「播放量 + 弹幕数 + 相对时间」，
+    // 这里让统计项可以被压缩并把相对时间换成省略号，避免 RenderFlex 横向溢出。
+    final bool narrow = crossAxisCount > 2;
     return Row(
       children: [
-        StatView(view: videoItem.stat.view),
-        const SizedBox(width: 8),
-        StatDanMu(danmu: videoItem.stat.danmu),
+        Flexible(
+          flex: narrow ? 3 : 0,
+          child: StatView(view: videoItem.stat.view, overflow: narrow),
+        ),
+        SizedBox(width: narrow ? 4 : 8),
+        Flexible(
+          flex: narrow ? 2 : 0,
+          child: StatDanMu(danmu: videoItem.stat.danmu, overflow: narrow),
+        ),
         if (videoItem is RecVideoItemModel) ...<Widget>[
           crossAxisCount > 1 ? const Spacer() : const SizedBox(width: 8),
-          RichText(
-            maxLines: 1,
-            text: TextSpan(
-                style: TextStyle(
-                  fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-                text: Utils.formatTimestampToRelativeTime(videoItem.pubdate)),
+          Flexible(
+            flex: narrow ? 2 : 0,
+            child: RichText(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                  style: TextStyle(
+                    fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                  text: Utils.formatTimestampToRelativeTime(videoItem.pubdate)),
+            ),
           ),
           const SizedBox(width: 4),
         ]

@@ -58,14 +58,16 @@ class LiveItemModel {
     userCover = json['user_cover'];
     userCoverFlag = json['user_cover_flag'];
     systemCover = json['system_cover'];
-    cover = json['cover'];
-    pic = json['cover'];
+    // 兼容 /room/v1/room/get_user_recommend：该接口没有 cover / area_name 字段，
+    // 只给 user_cover 与 system_cover，缺失时按优先级兜底，避免 UI 上 cover! / areaName! 崩溃。
+    cover = json['cover'] ?? json['system_cover'] ?? json['user_cover'];
+    pic = cover;
     link = json['link'];
     face = json['face'];
     parentId = json['parent_id'];
     parentName = json['parent_name'];
     areaId = json['area_id'];
-    areaName = json['area_name'];
+    areaName = json['area_name'] ?? json['areaName'] ?? '';
     sessionId = json['session_id'];
     groupId = json['group_id'];
     pkId = json['pk_id'];

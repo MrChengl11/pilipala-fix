@@ -207,8 +207,20 @@ class _FavDetailPageState extends State<FavDetailPage> {
             future: _futureBuilderFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.done) {
+                // future 以 error 完成时 snapshot.data 为 null，
+                // 直接 Map data = snapshot.data 会抛
+                // "type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'"
+                if (snapshot.hasError || snapshot.data == null) {
+                  return HttpError(
+                    errMsg: snapshot.error?.toString(),
+                    fn: () => setState(() {
+                      _futureBuilderFuture =
+                          _favDetailController.queryUserFavFolderDetail();
+                    }),
+                  );
+                }
                 Map data = snapshot.data;
-                if (data['status']) {
+                if (data['status'] == true) {
                   if (_favDetailController.item!.mediaCount == 0) {
                     return const NoData();
                   } else {

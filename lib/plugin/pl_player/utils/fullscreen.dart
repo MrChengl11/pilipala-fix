@@ -64,7 +64,12 @@ Future<void> exitFullScreen() async {
         mode,
         overlays: SystemUiOverlay.values,
       );
-      await SystemChrome.setPreferredOrientations([]);
+      // 不能清空方向限制：main.dart 启动时全局锁定竖屏（portraitUp/portraitDown），
+      // 这里清空会让整个 App 在退出全屏后跟随重力旋转
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
     } else if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
       await const MethodChannel('com.alexmercerind/media_kit_video')
           .invokeMethod(

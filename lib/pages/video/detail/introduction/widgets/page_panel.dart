@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -35,6 +36,7 @@ class _PagesPanelState extends State<PagesPanel> {
   late VideoDetailController _videoDetailController;
   final ScrollController listViewScrollCtr = ScrollController();
   late PersistentBottomSheetController? _bottomSheetController;
+  StreamSubscription<int>? _cidSubscription;
 
   @override
   void initState() {
@@ -42,17 +44,42 @@ class _PagesPanelState extends State<PagesPanel> {
     cid = widget.cid;
     episodes = widget.pages;
     _videoDetailController = Get.find<VideoDetailController>(tag: heroTag);
-    currentIndex.value = episodes.indexWhere((Part e) => e.cid == cid);
+    currentIndex.value = _indexOfCid(cid);
     scrollToIndex();
-    _videoDetailController.cid.listen((int p0) {
+    _cidSubscription = _videoDetailController.cid.listen((int p0) {
       cid = p0;
-      currentIndex.value = episodes.indexWhere((Part e) => e.cid == cid);
+      currentIndex.value = _indexOfCid(cid);
       scrollToIndex();
     });
   }
 
+  /// 根据 cid 取对应分P下标；未命中时回退到第一个，避免 -1 越界
+  int _indexOfCid(int targetCid) {
+    if (episodes.isEmpty) {
+      return -1;
+    }
+    final int index = episodes.indexWhere((Part e) => e.cid == targetCid);
+    return index < 0 ? 0 : index;
+  }
+
+  /// 渲染用的安全下标：pages 为空或 currentIndex 越界时兜底，防止 RangeError
+  int get _safeIndex {
+    if (widget.pages.isEmpty) {
+      return -1;
+    }
+    final int index = currentIndex.value;
+    if (index < 0) {
+      return 0;
+    }
+    if (index >= widget.pages.length) {
+      return widget.pages.length - 1;
+    }
+    return index;
+  }
+
   @override
   void dispose() {
+    _cidSubscription?.cancel();
     listViewScrollCtr.dispose();
     super.dispose();
   }
@@ -66,18 +93,25 @@ class _PagesPanelState extends State<PagesPanel> {
 
   void scrollToIndex() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 在回调函数中获取更新后的状态
-      final double offset = min((currentIndex * 150) - 75,
-          listViewScrollCtr.position.maxScrollExtent);
-      if (currentIndex.value == 0) {
-        listViewScrollCtr.jumpTo(0);
-      } else {
-        listViewScrollCtr.animateTo(
-          offset,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
+      if (!mounted || !listViewScrollCtr.hasClients || widget.pages.isEmpty) {
+        return;
       }
+      // 在回调函数中获取更新后的状态
+      final int index = _safeIndex;
+      if (index <= 0) {
+        listViewScrollCtr.jumpTo(0);
+        return;
+      }
+      final double maxExtent = listViewScrollCtr.position.maxScrollExtent;
+      double offset = min((index * 150.0) - 75, maxExtent);
+      if (offset < 0) {
+        offset = 0;
+      }
+      listViewScrollCtr.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     });
   }
 
@@ -92,14 +126,19 @@ class _PagesPanelState extends State<PagesPanel> {
             children: [
               const Text('视频选集 '),
               Expanded(
-                child: Obx(() => Text(
-                      ' 正在播放：${widget.pages[currentIndex.value].pagePart}',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                    )),
+                child: Obx(() {
+                  final int index = _safeIndex;
+                  return Text(
+                    index < 0
+                        ? ' 正在播放：'
+                        : ' 正在播放：${widget.pages[index].pagePart}',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  );
+                }),
               ),
               const SizedBox(width: 10),
               SizedBox(
@@ -137,7 +176,7 @@ class _PagesPanelState extends State<PagesPanel> {
             itemCount: widget.pages.length,
             itemExtent: 150,
             itemBuilder: (BuildContext context, int i) {
-              bool isCurrentIndex = currentIndex.value == i;
+              bool isCurrentIndex = _safeIndex == i;
               return Container(
                 width: 150,
                 margin: const EdgeInsets.only(right: 10),

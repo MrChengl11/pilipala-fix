@@ -3,27 +3,55 @@ import 'package:pilipala/models/live/follow.dart';
 import '../models/live/item.dart';
 import '../models/live/room_info.dart';
 import '../models/live/room_info_h5.dart';
+import '../utils/wbi_sign.dart';
 import 'api.dart';
 import 'init.dart';
 
 class LiveHttp {
   static Future liveList(
       {int? vmid, int? pn, int? ps, String? orderType}) async {
+    // 说明：原接口 /xlive/web-interface/v1/second/getUserRecommend 已被 B 站风控，
+    // 无条件返回 {"code":-352}，导致首页「直播」tab 永远空白并直接显示 -352。
+    // 改用仍可用的 /room/v1/room/get_user_recommend。
     var res = await Request().get(Api.liveList,
         data: {'page': pn, 'page_size': 30, 'platform': 'web'});
     if (res.data['code'] == 0) {
+      final dynamic list = res.data['data'];
+      if (list is! List) {
+        return {'status': false, 'data': [], 'msg': '直播列表格式异常'};
+      }
       return {
         'status': true,
-        'data': res.data['data']['list']
-            .map<LiveItemModel>((e) => LiveItemModel.fromJson(e))
+        'data': list
+            .whereType<Map>()
+            .map<LiveItemModel>(
+                (e) => LiveItemModel.fromJson(Map<String, dynamic>.from(e)))
             .toList()
       };
     } else {
       return {
         'status': false,
         'data': [],
-        'msg': res.data['message'],
+        'msg': _liveErrorMessage(res.data['code'], res.data['message']),
       };
+    }
+  }
+
+  /// 把直播接口的错误码转成用户能看懂的文案，避免直接显示 -352 / -101 这类数字。
+  static String _liveErrorMessage(dynamic code, dynamic message) {
+    switch (code) {
+      case -352:
+        return '直播推荐接口被风控拦截，请稍后重试';
+      case -101:
+        return '账号未登录';
+      case -400:
+        return '请求参数错误';
+      default:
+        final String msg = (message ?? '').toString();
+        if (msg.isEmpty || RegExp(r'^-?\d+$').hasMatch(msg)) {
+          return '直播列表加载失败';
+        }
+        return msg;
     }
   }
 
@@ -69,21 +97,32 @@ class LiveHttp {
   }
 
   // 获取弹幕信息
+  // 说明：/xlive/web-room/v1/index/getDanmuInfo 已接入风控，不带 wbi 签名
+  // 无条件返回 {"code":-352}。原来只传 id 一个参数，导致 host_list 与 token
+  // 都是空的 —— initSocket 只能退回硬编码域名、joinRoom 带空 key，
+  // 鉴权失败后服务端不推任何消息，表现就是「直播间弹幕一直不加载」。
   static Future liveDanmakuInfo({roomId}) async {
-    var res = await Request().get(Api.getDanmuInfo, data: {
-      'id': roomId,
-    });
-    if (res.data['code'] == 0) {
-      return {
-        'status': true,
-        'data': res.data['data'],
-      };
-    } else {
+    try {
+      final Map<String, dynamic> params = await WbiSign().makSign({
+        'id': roomId,
+        'type': 0,
+        'web_location': 444.8,
+      });
+      final res = await Request().get(Api.getDanmuInfo, data: params);
+      if (res.data['code'] == 0) {
+        final dynamic data = res.data['data'];
+        if (data is! Map) {
+          return {'status': false, 'data': [], 'msg': '弹幕服务器信息格式异常'};
+        }
+        return {'status': true, 'data': data};
+      }
       return {
         'status': false,
         'data': [],
-        'msg': res.data['message'],
+        'msg': res.data['message']?.toString() ?? '弹幕服务器信息获取失败',
       };
+    } catch (e) {
+      return {'status': false, 'data': [], 'msg': '弹幕服务器信息获取失败'};
     }
   }
 

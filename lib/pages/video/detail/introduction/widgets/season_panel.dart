@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/pages_bottom_sheet.dart';
@@ -27,8 +29,9 @@ class SeasonPanel extends StatefulWidget {
 }
 
 class _SeasonPanelState extends State<SeasonPanel> {
-  late List<EpisodeItem> episodes;
+  List<EpisodeItem> episodes = [];
   late int cid;
+  StreamSubscription<int>? _cidSubscription;
   late RxInt currentIndex = (-1).obs;
   final String heroTag = Get.arguments['heroTag'];
   late VideoDetailController _videoDetailController;
@@ -49,17 +52,36 @@ class _SeasonPanelState extends State<SeasonPanel> {
       for (int j = 0; j < episodesList.length; j++) {
         if (episodesList[j].cid == cid) {
           episodes = episodesList;
-          continue;
+          break;
         }
+      }
+      if (episodes.isNotEmpty) {
+        break;
       }
     }
 
     /// 取对应 season_id 的 episodes
-    currentIndex.value = episodes.indexWhere((EpisodeItem e) => e.cid == cid);
-    _videoDetailController.cid.listen((int p0) {
+    currentIndex.value = _indexOfCid(cid);
+    _cidSubscription = _videoDetailController.cid.listen((int p0) {
       cid = p0;
-      currentIndex.value = episodes.indexWhere((EpisodeItem e) => e.cid == cid);
+      currentIndex.value = _indexOfCid(cid);
     });
+  }
+
+  /// cid 对应集下标，未命中回退到第一个；没有剧集时返回 -1
+  int _indexOfCid(int targetCid) {
+    if (episodes.isEmpty) {
+      return -1;
+    }
+    final int index =
+        episodes.indexWhere((EpisodeItem e) => e.cid == targetCid);
+    return index < 0 ? 0 : index;
+  }
+
+  @override
+  void dispose() {
+    _cidSubscription?.cancel();
+    super.dispose();
   }
 
   void changeFucCall(item, int i) async {
@@ -145,10 +167,13 @@ class _SeasonPanelState extends State<SeasonPanel> {
                     height: 12,
                   ),
                   const SizedBox(width: 10),
-                  Obx(() => Text(
-                        '${currentIndex.value + 1}/${episodes.length}',
-                        style: Theme.of(context).textTheme.labelMedium,
-                      )),
+                  Obx(() {
+                    final int index = currentIndex.value;
+                    return Text(
+                      '${index < 0 ? 0 : index + 1}/${episodes.length}',
+                      style: Theme.of(context).textTheme.labelMedium,
+                    );
+                  }),
                   const SizedBox(width: 6),
                   const Icon(
                     Icons.arrow_forward_ios_outlined,

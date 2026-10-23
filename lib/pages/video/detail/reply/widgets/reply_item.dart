@@ -61,7 +61,8 @@ class ReplyItem extends StatelessWidget {
           }
           feedBack();
           if (replyReply != null) {
-            replyReply!(replyItem, null, replyItem!.replies!.isNotEmpty);
+            replyReply!(
+                replyItem, null, replyItem?.replies?.isNotEmpty ?? false);
           }
         },
         onLongPress: () {
@@ -219,7 +220,7 @@ class ReplyItem extends StatelessWidget {
                               color: colorScheme.outline,
                             ),
                           ),
-                        if (replyItem!.invisible!)
+                        if (replyItem!.invisible == true)
                           TextSpan(
                             text: ' • 隐藏的评论',
                             style: TextStyle(
@@ -240,8 +241,9 @@ class ReplyItem extends StatelessWidget {
           margin: const EdgeInsets.only(top: 10, left: 45, right: 6, bottom: 4),
           child: Text.rich(
             style: const TextStyle(height: 1.75),
-            maxLines:
-                replyItem!.content!.isText! && replyLevel == '1' ? 3 : 999,
+            maxLines: replyItem!.content?.isText == true && replyLevel == '1'
+                ? 3
+                : 999,
             overflow: TextOverflow.ellipsis,
             TextSpan(
               children: [
@@ -264,9 +266,9 @@ class ReplyItem extends StatelessWidget {
         // 操作区域
         bottonAction(context, replyItem!.replyControl, replySave),
         // 一楼的评论
-        if ((replyItem!.replyControl!.isShow! ||
-                replyItem!.replies!.isNotEmpty) &&
-            showReplyRow!) ...[
+        if (((replyItem!.replyControl?.isShow ?? false) ||
+                (replyItem!.replies?.isNotEmpty ?? false)) &&
+            (showReplyRow ?? true)) ...[
           Padding(
             padding: const EdgeInsets.only(top: 5, bottom: 12),
             child: ReplyItemRow(
@@ -340,7 +342,7 @@ class ReplyItem extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 2),
-        if (replyItem!.upAction!.like!) ...[
+        if (replyItem!.upAction?.like == true) ...[
           Text(
             'up主觉得很赞',
             style: TextStyle(
@@ -349,8 +351,7 @@ class ReplyItem extends StatelessWidget {
           ),
           const SizedBox(width: 2),
         ],
-        if (replyItem!.cardLabel!.isNotEmpty &&
-            replyItem!.cardLabel!.contains('热评'))
+        if ((replyItem!.cardLabel ?? const []).contains('热评'))
           Text(
             '热评',
             style: TextStyle(
@@ -383,7 +384,7 @@ class ReplyItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isShow = replyControl!.isShow!;
+    final bool isShow = replyControl?.isShow == true;
     final int extraRow = replyControl != null && isShow ? 1 : 0;
     ColorScheme colorScheme = Theme.of(context).colorScheme;
     TextTheme textTheme = Theme.of(context).textTheme;
@@ -398,7 +399,7 @@ class ReplyItemRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (replies!.isNotEmpty)
+            if (replies != null && replies!.isNotEmpty)
               for (int i = 0; i < replies!.length; i++) ...[
                 InkWell(
                   // 一楼点击评论展开评论详情
@@ -406,7 +407,7 @@ class ReplyItemRow extends StatelessWidget {
                     replyReply?.call(
                       replyItem,
                       replies![i],
-                      replyItem!.replies!.isNotEmpty,
+                      replyItem?.replies?.isNotEmpty ?? false,
                     );
                   },
                   onLongPress: () {
@@ -487,10 +488,10 @@ class ReplyItemRow extends StatelessWidget {
                         fontSize: textTheme.labelMedium!.fontSize,
                       ),
                       children: [
-                        if (replyControl!.upReply!)
+                        if (replyControl?.upReply ?? false)
                           const TextSpan(text: 'up主等人 '),
                         TextSpan(
-                          text: replyControl!.entryText!,
+                          text: replyControl?.entryText,
                           style: TextStyle(
                             color: colorScheme.primary,
                           ),

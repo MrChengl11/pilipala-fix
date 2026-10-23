@@ -214,8 +214,10 @@ class VideoDetailController extends GetxController
 
     if (archiveSourceType.value == 'dash') {
       /// 根据currentVideoQa和currentDecodeFormats 重新设置videoUrl
-      List<VideoItem> videoList =
-          data.dash!.video!.where((i) => i.id == currentVideoQa.code).toList();
+      final List<VideoItem> videoList =
+          (data.dash?.video ?? const <VideoItem>[])
+              .where((i) => i.id == currentVideoQa.code)
+              .toList();
       if (videoList.isEmpty) {
         // 当前清晰度不在本次返回的 dash 列表中（会员/接口未返回该清晰度）：
         // 恢复监听后提示并返回，避免下方 firstWhere 抛 StateError 让播放器卡在旧状态
@@ -223,31 +225,36 @@ class VideoDetailController extends GetxController
         SmartDialog.showToast('该清晰度暂不可用，请选择其他清晰度');
         return;
       }
+      // currentDecodeFormats/codecs 都可能为 null（会员画质、部分接口不返回编码格式），
+      // 直接 ?.code 传给 startsWith 会在裸类型下抛 TypeError
+      final String decodeCode = currentDecodeFormats?.code ?? '';
       try {
-        firstVideo = videoList.firstWhere(
-            (i) => i.codecs!.startsWith(currentDecodeFormats?.code));
+        firstVideo = videoList
+            .firstWhere((i) => (i.codecs ?? '').startsWith(decodeCode));
       } catch (_) {
         if (currentVideoQa == VideoQuality.dolbyVision) {
           firstVideo = videoList.first;
           currentDecodeFormats =
-              VideoDecodeFormatsCode.fromString(videoList.first.codecs!)!;
+              VideoDecodeFormatsCode.fromString(videoList.first.codecs ?? '')!;
         } else {
           // 当前格式不可用
           currentDecodeFormats = VideoDecodeFormatsCode.fromString(setting.get(
               SettingBoxKey.defaultDecode,
               defaultValue: VideoDecodeFormats.values.last.code))!;
+          final String fallbackCode = currentDecodeFormats?.code ?? '';
           firstVideo = videoList.firstWhere(
-              (i) => i.codecs!.startsWith(currentDecodeFormats?.code),
+              (i) => (i.codecs ?? '').startsWith(fallbackCode),
               orElse: () => videoList.first);
         }
       }
-      videoUrl = firstVideo.baseUrl!;
+      videoUrl = firstVideo.baseUrl ?? '';
 
       /// 根据currentAudioQa 重新设置audioUrl
-      if (currentAudioQa != null) {
-        final AudioItem firstAudio = data.dash!.audio!.firstWhere(
+      final List<AudioItem> audioList = data.dash?.audio ?? const <AudioItem>[];
+      if (currentAudioQa != null && audioList.isNotEmpty) {
+        final AudioItem firstAudio = audioList.firstWhere(
           (AudioItem i) => i.id == currentAudioQa!.code,
-          orElse: () => data.dash!.audio!.first,
+          orElse: () => audioList.first,
         );
         audioUrl = firstAudio.baseUrl ?? '';
       }
@@ -406,18 +413,30 @@ class VideoDetailController extends GetxController
 
       /// 优先顺序 设置中指定质量 -> 当前可选的最高质量
       late AudioItem? firstAudio;
-      final List<AudioItem> audiosList = data.dash!.audio!;
+      // 复制一份再合并杜比/无损音轨：直接 insert 到 data.dash.audio 会让该列表
+      // 每次 playerInit 都重复累积，音质面板出现重复项
+      final List<AudioItem> audiosList =
+          List<AudioItem>.of(data.dash!.audio ?? const <AudioItem>[]);
 
       try {
+        void addAudioIfAbsent(AudioItem? item) {
+          if (item == null) return;
+          if (audiosList.any((e) => e.id == item.id)) return;
+          audiosList.insert(0, item);
+        }
+
         if (data.dash!.dolby?.audio?.isNotEmpty == true) {
           // 杜比
-          audiosList.insert(0, data.dash!.dolby!.audio!.first);
+          addAudioIfAbsent(data.dash!.dolby!.audio!.first);
         }
 
         if (data.dash!.flac?.audio != null) {
           // 无损
-          audiosList.insert(0, data.dash!.flac!.audio!);
+          addAudioIfAbsent(data.dash!.flac!.audio);
         }
+
+        // 音质选择面板读取的是 dash.audio，这里同步一次去重后的列表
+        data.dash!.audio = audiosList;
 
         if (audiosList.isNotEmpty) {
           final List<int> numbers = audiosList.map((map) => map.id!).toList();

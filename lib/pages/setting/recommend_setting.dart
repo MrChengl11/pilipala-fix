@@ -91,8 +91,10 @@ class _RecommendSettingState extends State<RecommendSetting> {
                       SmartDialog.showToast('请先登录');
                       return;
                     }
-                    // 显示一个确认框，告知用户可能会导致账号被风控
-                    SmartDialog.show(
+                    // 显示一个确认框，告知用户可能会导致账号被风控。
+                    // 必须 await：原代码未 await，show 之后会立刻走到下面
+                    // 的 result != null 分支，导致用户点「取消」也照样保存
+                    await SmartDialog.show(
                         animationType: SmartAnimationType.centerFade_otherSlide,
                         builder: (context) {
                           return AlertDialog(
@@ -103,13 +105,15 @@ class _RecommendSettingState extends State<RecommendSetting> {
                               TextButton(
                                 onPressed: () {
                                   result = null;
-                                  SmartDialog.dismiss();
+                                  SmartDialog.dismiss(
+                                      status: SmartStatus.dialog);
                                 },
                                 child: const Text('取消'),
                               ),
                               TextButton(
                                 onPressed: () async {
-                                  SmartDialog.dismiss();
+                                  SmartDialog.dismiss(
+                                      status: SmartStatus.dialog);
                                   await MemberHttp.cookieToKey();
                                 },
                                 child: const Text('确定'),
@@ -201,7 +205,8 @@ class _RecommendSettingState extends State<RecommendSetting> {
             subTitle: '推荐中已关注用户发布的内容不会被过滤',
             setKey: SettingBoxKey.exemptFilterForFollowed,
             defaultVal: true,
-            callFn: (_) => {RecommendFilter.update},
+            // 原来是 {RecommendFilter.update} —— Set 字面量，函数从未被调用
+            callFn: (_) => RecommendFilter.update(),
           ),
           // ListTile(
           //   dense: false,
@@ -236,7 +241,8 @@ class _RecommendSettingState extends State<RecommendSetting> {
             subTitle: '视频详情页的相关视频也进行过滤²',
             setKey: SettingBoxKey.applyFilterToRelatedVideos,
             defaultVal: true,
-            callFn: (_) => {RecommendFilter.update},
+            // 同上：Set 字面量导致过滤器不刷新
+            callFn: (_) => RecommendFilter.update(),
           ),
           ListTile(
             dense: true,
@@ -247,10 +253,9 @@ class _RecommendSettingState extends State<RecommendSetting> {
               '* 其它（如热门视频、手动搜索、链接跳转等）均不受过滤器影响。\n'
               '* 设定较严苛的条件可导致推荐项数锐减或多次请求，请酌情选择。\n'
               '* 后续可能会增加更多过滤条件，敬请期待。',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall!
-                  .copyWith(color: Theme.of(context).colorScheme.outline.withOpacity(0.7)),
+              style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                  color:
+                      Theme.of(context).colorScheme.outline.withOpacity(0.7)),
             ),
           )
         ],

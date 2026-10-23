@@ -7,12 +7,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
+import 'package:pilipala/http/init.dart';
 import 'package:pilipala/http/user.dart';
 import 'package:pilipala/pages/dynamics/index.dart';
 import 'package:pilipala/pages/home/index.dart';
 import 'package:pilipala/pages/media/index.dart';
 import 'package:pilipala/pages/mine/index.dart';
 import 'package:pilipala/utils/cookie.dart';
+import 'package:pilipala/utils/global_data_cache.dart';
 import 'package:pilipala/utils/storage.dart';
 import 'package:uuid/uuid.dart';
 
@@ -80,6 +82,11 @@ class LoginUtils {
             userInfoCache = await Hive.openBox('userInfo');
           }
           await userInfoCache.put('userInfoCache', result['data']);
+          // 登录后立刻同步缓存与请求头，否则不重启应用时：
+          // GlobalDataCache().userInfo 仍是 null（自己的评论没有删除入口），
+          // x-bili-mid 仍缺失（推荐/风控按未登录处理）。
+          GlobalDataCache().refreshUserInfo();
+          Request.setOptionsHeaders(result['data'], true);
 
           final HomeController homeCtr = Get.find<HomeController>();
           homeCtr.updateLoginStatus(true);
