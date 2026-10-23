@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/widgets/network_img_layer.dart';
+import 'package:pilipala/models/live/item.dart';
 import 'package:pilipala/utils/utils.dart';
 
 import 'rich_node_panel.dart';
@@ -41,6 +42,14 @@ Widget livePanel(item, context, {floor = 1}) {
               ? EdgeInsets.zero
               : const EdgeInsets.only(left: 12, right: 12),
           child: GestureDetector(
+            onTap: () {
+              final String topic = (item.modules.moduleDynamic.topic.name ?? '')
+                  .toString()
+                  .replaceAll('#', '')
+                  .trim();
+              if (topic.isEmpty) return;
+              Get.toNamed('/searchResult', parameters: {'keyword': topic});
+            },
             child: Text(
               '#${item.modules.moduleDynamic.topic.name}',
               style: authorStyle,
@@ -54,7 +63,27 @@ Widget livePanel(item, context, {floor = 1}) {
         const SizedBox(height: 6),
       ],
       GestureDetector(
-        onTap: () {},
+        // DYNAMIC_TYPE_LIVE：直接进直播间，roomId 取自 major.live.id
+        onTap: () {
+          final dynamic live = content.live;
+          final int? roomId = live?.id;
+          if (roomId == null) return;
+          final LiveItemModel liveItem = LiveItemModel.fromJson({
+            'title': live.title,
+            'uname': item.modules.moduleAuthor.name,
+            'cover': live.cover,
+            'mid': item.modules.moduleAuthor.mid,
+            'face': item.modules.moduleAuthor.face,
+            'roomid': roomId,
+          });
+          Get.toNamed(
+            '/liveRoom?roomid=$roomId',
+            arguments: {
+              'liveItem': liveItem,
+              'heroTag': roomId.toString(),
+            },
+          );
+        },
         child: Row(
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,

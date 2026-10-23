@@ -1,4 +1,5 @@
 import 'dart:developer';
+import 'package:dio/dio.dart';
 import 'package:hive/hive.dart';
 import '../common/constants.dart';
 import '../models/common/reply_type.dart';
@@ -537,10 +538,15 @@ class VideoHttp {
   }
 
   static Future getSubtitle({int? cid, String? bvid}) async {
-    var res = await Request().get(Api.getSubtitleConfig, data: {
-      'cid': cid,
-      'bvid': bvid,
-    });
+    // Request().get 原来在 try 之外：断网/超时时 DioException 会直接抛出，
+    // 调用方（播放器）没有 try 就会让整个视频详情页挂掉
+    Response res;
+    try {
+      res = await Request()
+          .get(Api.getSubtitleConfig, data: {'cid': cid, 'bvid': bvid});
+    } catch (err) {
+      return {'status': false, 'data': [], 'msg': err.toString()};
+    }
     try {
       if (res.data['code'] == 0) {
         return {

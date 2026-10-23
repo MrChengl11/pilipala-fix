@@ -257,8 +257,10 @@ class _VideoDetailPageState extends State<VideoDetailPage>
     shutdownTimerService.handleWaitingFinished();
     if (plPlayerController != null) {
       plPlayerController!.removeStatusLister(playerListener);
-      plPlayerController!.dispose();
     }
+    // 播放器由 releasePlayer() 统一释放（幂等）：view.dispose 与 controller.onClose
+    // 都会触发，若各自 dispose 会重复扣减播放器计数。
+    vdCtr.releasePlayer();
     if (vdCtr.floating != null) {
       vdCtr.floating!.dispose();
     }
@@ -505,12 +507,31 @@ class _VideoDetailPageState extends State<VideoDetailPage>
                                       ),
                               )
                             : IconButton(
+                                // 封面态（含「专属视频仅试看」）下这个按钮原来
+                                // 是空 onPressed，点了完全没反应。开关本身与是否
+                                // 在播放无关，这里复用同一套取反逻辑。
+                                onPressed: () {
+                                  plPlayerController?.isOpenDanmu.value =
+                                      !(plPlayerController?.isOpenDanmu.value ??
+                                          false);
+                                  setState(() {});
+                                },
                                 icon: SvgPicture.asset(
-                                  'assets/images/video/danmu_close.svg',
+                                  (plPlayerController?.isOpenDanmu.value ??
+                                          false)
+                                      ? 'assets/images/video/danmu_open.svg'
+                                      : 'assets/images/video/danmu_close.svg',
                                   // ignore: deprecated_member_use
-                                  color: Theme.of(context).colorScheme.outline,
+                                  color:
+                                      (plPlayerController?.isOpenDanmu.value ??
+                                              false)
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .outline,
                                 ),
-                                onPressed: () {},
                               ),
                       ),
                     ),
@@ -610,10 +631,16 @@ class _VideoDetailPageState extends State<VideoDetailPage>
           if (snapshot.connectionState == ConnectionState.waiting) {
             return buildLoadingWidget();
           } else if (snapshot.connectionState == ConnectionState.done) {
-            if (snapshot.hasData && snapshot.data['status']) {
+            if (snapshot.hasData &&
+                snapshot.data is Map &&
+                snapshot.data['status'] == true) {
               return buildVideoPlayerWidget(snapshot);
             } else {
-              return buildErrorWidget(snapshot.error);
+              final dynamic data = snapshot.data;
+              final dynamic errMsg = data is Map
+                  ? (data['msg'] ?? snapshot.error)
+                  : snapshot.error;
+              return buildErrorWidget(errMsg ?? '请检查网络后重试');
             }
           } else {
             return buildErrorWidget('未知错误');
@@ -671,12 +698,9 @@ class _VideoDetailPageState extends State<VideoDetailPage>
                                       ? 0
                                       : MediaQuery.of(context).padding.top))
                               : videoHeight.value;
-                      if (orientation == Orientation.landscape ||
-                          isFullScreen) {
-                        enterFullScreen();
-                      } else {
-                        exitFullScreen();
-                      }
+                      // 复用去重后的实现：避免每次重建都调用系统栏/方向接口
+                      _applyImmersiveUi(orientation == Orientation.landscape ||
+                          isFullScreen);
                       return SliverAppBar(
                         automaticallyImplyLeading: false,
                         pinned: true,

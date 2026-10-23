@@ -20,13 +20,21 @@ class GroupPanel extends StatefulWidget {
 class _GroupPanelState extends State<GroupPanel> {
   final Box<dynamic> localCache = GStrorage.localCache;
   late Future _futureBuilderFuture;
-  late List<MemberTagItemModel> tagsList;
+  List<MemberTagItemModel> tagsList = <MemberTagItemModel>[];
   bool showDefault = true;
 
   @override
   void initState() {
     super.initState();
     _futureBuilderFuture = MemberHttp.followUpTags();
+  }
+
+  /// 重新请求关注分组（加载失败后重试）
+  void _reload() {
+    if (!mounted) return;
+    setState(() {
+      _futureBuilderFuture = MemberHttp.followUpTags();
+    });
   }
 
   void onSave() async {
@@ -70,49 +78,53 @@ class _GroupPanelState extends State<GroupPanel> {
               future: _futureBuilderFuture,
               builder: (BuildContext context, AsyncSnapshot snapshot) {
                 if (snapshot.connectionState == ConnectionState.done) {
-                  Map data = snapshot.data as Map;
-                  if (data['status']) {
-                    tagsList = data['data'];
-                    return ListView.builder(
-                      controller: widget.scrollController,
-                      itemCount: data['data'].length,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          onTap: () {
-                            data['data'][index].checked =
-                                !data['data'][index].checked;
-                            showDefault =
-                                !data['data'].any((e) => e.checked == true);
-                            setState(() {});
-                          },
-                          dense: true,
-                          leading: const Icon(Icons.group_outlined),
-                          minLeadingWidth: 0,
-                          title: Text(data['data'][index].name),
-                          subtitle: data['data'][index].tip != ''
-                              ? Text(data['data'][index].tip)
-                              : null,
-                          trailing: Transform.scale(
-                            scale: 0.9,
-                            child: Checkbox(
-                              value: data['data'][index].checked,
-                              onChanged: (bool? checkValue) {
-                                data['data'][index].checked = checkValue;
-                                showDefault =
-                                    !data['data'].any((e) => e.checked == true);
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  } else {
-                    return HttpError(
-                      errMsg: data['msg'],
-                      fn: () => setState(() {}),
+                  final dynamic snapshotData = snapshot.data;
+                  if (snapshot.hasError ||
+                      snapshotData is! Map ||
+                      snapshotData['status'] != true) {
+                    final dynamic msg =
+                        snapshotData is Map ? snapshotData['msg'] : null;
+                    return HttpErrorBox(
+                      errMsg: msg ?? '获取关注分组失败，请检查网络后重试',
+                      fn: _reload,
                     );
                   }
+                  final Map data = snapshotData;
+                  final List dataList =
+                      data['data'] is List ? data['data'] as List : const [];
+                  tagsList = dataList.cast<MemberTagItemModel>();
+                  return ListView.builder(
+                    controller: widget.scrollController,
+                    itemCount: dataList.length,
+                    itemBuilder: (context, index) {
+                      final MemberTagItemModel item = dataList[index];
+                      return ListTile(
+                        onTap: () {
+                          item.checked = !(item.checked ?? false);
+                          showDefault =
+                              !dataList.any((e) => e.checked == true);
+                          setState(() {});
+                        },
+                        dense: true,
+                        leading: const Icon(Icons.group_outlined),
+                        minLeadingWidth: 0,
+                        title: Text(item.name ?? ''),
+                        subtitle: (item.tip ?? '') != '' ? Text(item.tip!) : null,
+                        trailing: Transform.scale(
+                          scale: 0.9,
+                          child: Checkbox(
+                            value: item.checked ?? false,
+                            onChanged: (bool? checkValue) {
+                              item.checked = checkValue ?? false;
+                              showDefault =
+                                  !dataList.any((e) => e.checked == true);
+                              setState(() {});
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  );
                 } else {
                   // 骨架屏
                   return const Text('请求中');

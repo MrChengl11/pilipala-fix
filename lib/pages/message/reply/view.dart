@@ -54,16 +54,36 @@ class _MessageReplyPageState extends State<MessageReplyPage> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await _messageReplyCtr.queryMessageReply(type: 'init');
+          final Future future =
+              _messageReplyCtr.queryMessageReply(type: 'init');
+          if (mounted) {
+            setState(() {
+              _futureBuilderFuture = future;
+            });
+          }
+          await future;
         },
         child: FutureBuilder(
           future: _futureBuilderFuture,
           builder: (BuildContext context, AsyncSnapshot snapshot) {
             if (snapshot.connectionState == ConnectionState.done) {
-              if (snapshot.data == null) {
-                return const SizedBox();
+              var data = snapshot.data;
+              if (data is! Map) {
+                return CustomScrollView(
+                  slivers: [
+                    HttpError(
+                      errMsg: snapshot.error?.toString() ?? '请求异常',
+                      fn: () {
+                        setState(() {
+                          _futureBuilderFuture =
+                              _messageReplyCtr.queryMessageReply();
+                        });
+                      },
+                    )
+                  ],
+                );
               }
-              if (snapshot.data['status']) {
+              if (data['status']) {
                 final replyItems = _messageReplyCtr.replyItems;
                 return Obx(
                   () => ListView.separated(
@@ -86,7 +106,7 @@ class _MessageReplyPageState extends State<MessageReplyPage> {
                 return CustomScrollView(
                   slivers: [
                     HttpError(
-                      errMsg: snapshot.data['msg'],
+                      errMsg: data['msg'] ?? '请求异常',
                       fn: () {
                         setState(() {
                           _futureBuilderFuture =

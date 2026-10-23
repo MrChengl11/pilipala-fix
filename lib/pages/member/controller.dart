@@ -9,6 +9,7 @@ import 'package:pilipala/models/member/archive.dart';
 import 'package:pilipala/models/member/coin.dart';
 import 'package:pilipala/models/member/info.dart';
 import 'package:pilipala/models/member/like.dart';
+import 'package:pilipala/models/member/seasons.dart';
 import 'package:pilipala/utils/storage.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -143,7 +144,8 @@ class MemberController extends GetxController {
         default:
           attributeText.value = '关注';
       }
-      if (res['data']['special'] == 1) {
+      // data 里不一定带 special 字段（未登录/接口降级），强解会 NoSuchMethod
+      if (res['data'] is Map && res['data']['special'] == 1) {
         attributeText.value += 'SP';
       }
     }
@@ -205,11 +207,15 @@ class MemberController extends GetxController {
     if (!res['status']) {
       SmartDialog.showToast("用户合集请求异常：${res['msg']}");
     } else {
-      // 只取前四个专栏
-      res['data'].seasonsList.map((e) {
-        e.archives =
-            e.archives!.length > 4 ? e.archives!.sublist(0, 4) : e.archives!;
-      }).toList();
+      // 只取前四个专栏（seasonsList / archives 都可能为 null）
+      final List<MemberSeasonsList> seasons =
+          (res['data'] as MemberSeasonsDataModel).seasonsList ??
+              <MemberSeasonsList>[];
+      for (final e in seasons) {
+        final List<MemberArchiveItem> archives =
+            e.archives ?? <MemberArchiveItem>[];
+        e.archives = archives.length > 4 ? archives.sublist(0, 4) : archives;
+      }
     }
     return res;
   }
@@ -218,7 +224,12 @@ class MemberController extends GetxController {
   Future getRecentCoinVideo() async {
     if (userInfo == null) return;
     var res = await MemberHttp.getRecentCoinVideo(mid: mid);
-    recentCoinsList.value = res['data'];
+    // 接口失败时 data 是空 List，直接赋给 RxList<MemberCoinsDataModel>
+    // 会抛类型错误（个人页「最近投币」白屏）
+    if (res['status'] == true && res['data'] is List) {
+      recentCoinsList.value =
+          List<MemberCoinsDataModel>.from(res['data'] as List);
+    }
     return res;
   }
 
@@ -226,7 +237,10 @@ class MemberController extends GetxController {
   Future getRecentLikeVideo() async {
     if (userInfo == null) return;
     var res = await MemberHttp.getRecentLikeVideo(mid: mid);
-    recentLikeList.value = res['data'];
+    if (res['status'] == true && res['data'] is List) {
+      recentLikeList.value =
+          List<MemberLikeDataModel>.from(res['data'] as List);
+    }
     return res;
   }
 

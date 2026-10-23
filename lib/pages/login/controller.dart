@@ -7,7 +7,9 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/http/login.dart';
 import 'package:gt3_flutter_plugin/gt3_flutter_plugin.dart';
+import 'package:pilipala/http/user.dart';
 import 'package:pilipala/models/login/index.dart';
+import 'package:pilipala/utils/cookie.dart';
 import 'package:pilipala/utils/login.dart';
 
 class LoginPageController extends GetxController {
@@ -340,5 +342,35 @@ class LoginPageController extends GetxController {
       validTimer?.cancel();
       Get.back();
     }
+  }
+
+  // 手动检查登录状态：用于扫码/网页登录完成后回到 App，或排查登录态是否失效
+  Future<void> checkLoginStatus() async {
+    SmartDialog.showLoading(msg: '检查中...');
+    try {
+      bool isLogin = await _queryIsLogin();
+      if (!isLogin) {
+        // 扫码/网页登录可能只把 cookie 写进了 WebView，同步一次 Cookie 后再查
+        await SetCookie.onSet();
+        isLogin = await _queryIsLogin();
+      }
+      SmartDialog.dismiss(status: SmartStatus.loading);
+      if (isLogin) {
+        // 复用既有登录成功流程：写入缓存、刷新各页面登录态并返回上一页
+        await LoginUtils.confirmLogin('', null);
+      } else {
+        SmartDialog.showToast('未检测到登录状态，请重新登录');
+      }
+    } catch (err) {
+      SmartDialog.dismiss(status: SmartStatus.loading);
+      SmartDialog.showToast('登录状态检查失败，请稍后重试');
+    }
+  }
+
+  Future<bool> _queryIsLogin() async {
+    final result = await UserHttp.userInfo();
+    return result['status'] == true &&
+        result['data'] != null &&
+        result['data'].isLogin == true;
   }
 }

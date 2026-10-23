@@ -233,7 +233,7 @@ class ProfilePanel extends StatelessWidget {
                     if (ctr.ownerMid == ctr.mid && ctr.ownerMid != -1) ...[
                       TextButton(
                         onPressed: () {
-                          SmartDialog.showToast('功能开发中 💪');
+                          SmartDialog.showToast('编辑资料暂未支持，请到 B 站客户端修改');
                         },
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.only(left: 80, right: 80),
@@ -247,7 +247,10 @@ class ProfilePanel extends StatelessWidget {
                     ],
                     if (ctr.ownerMid == -1) ...[
                       TextButton(
-                        onPressed: () {},
+                        onPressed: () => Get.toNamed(
+                          '/loginPage',
+                          preventDuplicates: false,
+                        ),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.only(left: 80, right: 80),
                           foregroundColor:

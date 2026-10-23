@@ -21,8 +21,11 @@ class MessageLikeController extends GetxController {
     var res = await MsgHttp.messageLike(
         id: params['id'], likeTime: params['likeTime']);
     if (res['status']) {
-      cursor = res['data'].total.cursor;
-      likeItems.addAll(res['data'].total.items);
+      // MessageLikeModel.total 在设计上可为 null（模型里是条件解析），
+      // 接口只返回 latest 时 total.cursor 会抛空指针 → 「收到的赞」整页失败
+      final Total? total = res['data'].total;
+      cursor = total?.cursor;
+      likeItems.addAll(total?.items ?? <MessageLikeItem>[]);
     }
     return res;
   }

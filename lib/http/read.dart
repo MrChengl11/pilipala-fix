@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:html/parser.dart';
 import 'package:pilipala/models/read/opus.dart';
 import 'package:pilipala/models/read/read.dart';
@@ -82,12 +83,19 @@ class ReadHttp {
         'isCv': isCv,
         'cvId': cvId,
       };
-    } catch (e) {
+    } catch (e, s) {
+      // 保留堆栈到日志，便于后续定位字段类型漂移
+      debugPrint('parseArticleOpus model error: $e\n$s');
       return {'status': false, 'msg': '专栏内容解析失败'};
     }
   }
 
   // 解析专栏 cv格式
+  //
+  // B 站已把 /read/cvXXX 也迁到 detail.modules 结构，老字段 readInfo
+  // 在页面上完全不存在（实测 cv5337643 / cv7000000 均如此），
+  // 原来只解析 readInfo 会让所有 cv 专栏页显示「专栏内容缺失」。
+  // 这里同时解析两套结构，页面按可用性选择渲染方式。
   static Future parseArticleCv({required String id}) async {
     var res = await Request().get(
       'https://www.bilibili.com/read/cv$id',
@@ -97,14 +105,29 @@ class ReadHttp {
     if (html.isEmpty) return {'status': false, 'msg': '专栏内容获取失败'};
     final Map<String, dynamic>? jsonData = _extractJson(html);
     if (jsonData == null) return {'status': false, 'msg': '专栏内容解析失败'};
+    final List<String> errors = [];
+    ReadDataModel? readData;
     try {
-      return {
-        'status': true,
-        'data': ReadDataModel.fromJson(jsonData),
-      };
-    } catch (e) {
+      readData = ReadDataModel.fromJson(jsonData);
+    } catch (e, s) {
+      errors.add('ReadData: $e');
+      debugPrint('parseArticleCv ReadData error: $e\n$s');
+    }
+    OpusDataModel? opusData;
+    try {
+      opusData = OpusDataModel.fromJson(jsonData);
+    } catch (e, s) {
+      errors.add('OpusData: $e');
+      debugPrint('parseArticleCv OpusData error: $e\n$s');
+    }
+    if (readData == null && opusData == null) {
       return {'status': false, 'msg': '专栏内容解析失败'};
     }
+    return {
+      'status': true,
+      'data': readData ?? ReadDataModel(),
+      'opus': opusData,
+    };
   }
 
   //

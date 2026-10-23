@@ -180,8 +180,13 @@ class _HistoryPageState extends State<HistoryPage> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await _historyController.onRefresh();
-          return;
+          final Future future = _historyController.onRefresh();
+          if (mounted) {
+            setState(() {
+              _futureBuilderFuture = future;
+            });
+          }
+          await future;
         },
         child: CustomScrollView(
           controller: _historyController.scrollController,
@@ -190,11 +195,19 @@ class _HistoryPageState extends State<HistoryPage> {
               future: _futureBuilderFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.done) {
-                  if (snapshot.data == null) {
-                    return const SliverToBoxAdapter(child: SizedBox());
+                  var data = snapshot.data;
+                  if (data is! Map) {
+                    return HttpError(
+                      errMsg: snapshot.error?.toString() ?? '请求异常',
+                      fn: () {
+                        setState(() {
+                          _futureBuilderFuture =
+                              _historyController.queryHistoryList();
+                        });
+                      },
+                    );
                   }
-                  Map? data = snapshot.data;
-                  if (data != null && data['status']) {
+                  if (data['status']) {
                     return Obx(
                       () => _historyController.historyList.isNotEmpty
                           ? SliverList(
@@ -219,10 +232,10 @@ class _HistoryPageState extends State<HistoryPage> {
                     );
                   } else {
                     return HttpError(
-                      errMsg: data?['msg'] ?? '请求异常',
-                      btnText: data?['code'] == -101 ? '去登录' : null,
+                      errMsg: data['msg'] ?? '请求异常',
+                      btnText: data['code'] == -101 ? '去登录' : null,
                       fn: () {
-                        if (data?['code'] == -101) {
+                        if (data['code'] == -101) {
                           RoutePush.loginRedirectPush();
                         } else {
                           setState(() {

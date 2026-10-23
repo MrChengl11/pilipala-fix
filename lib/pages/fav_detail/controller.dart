@@ -136,6 +136,11 @@ class FavDetailController extends GetxController {
   }
 
   Future toViewPlayAll() async {
+    // 收藏夹为空时点「播放全部」会 StateError
+    if (favList.isEmpty) {
+      SmartDialog.showToast('收藏夹为空');
+      return;
+    }
     final FavDetailItemData firstItem = favList.first;
     final String heroTag = Utils.makeHeroTag(firstItem.bvid);
     Get.toNamed(

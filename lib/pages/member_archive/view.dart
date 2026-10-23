@@ -43,6 +43,13 @@ class _MemberArchivePageState extends State<MemberArchivePage> {
     );
   }
 
+  void _retry() {
+    setState(() {
+      _futureBuilderFuture =
+          _memberArchivesController.getMemberArchive('init');
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,14 +120,14 @@ class _MemberArchivePageState extends State<MemberArchivePage> {
                     );
                   } else {
                     return HttpError(
-                      errMsg: snapshot.data['msg'],
-                      fn: () {},
+                      errMsg: snapshot.data['msg'] ?? '请求失败',
+                      fn: _retry,
                     );
                   }
                 } else {
                   return HttpError(
-                    errMsg: snapshot.data['msg'],
-                    fn: () {},
+                    errMsg: snapshot.error?.toString() ?? '请求失败',
+                    fn: _retry,
                   );
                 }
               } else {

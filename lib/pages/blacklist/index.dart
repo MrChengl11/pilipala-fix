@@ -67,7 +67,15 @@ class _BlackListPageState extends State<BlackListPage> {
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: () async => await _blackListController.queryBlacklist(),
+        onRefresh: () async {
+          final Future future = _blackListController.queryBlacklist();
+          if (mounted) {
+            setState(() {
+              _futureBuilderFuture = future;
+            });
+          }
+          await future;
+        },
         child: FutureBuilder(
           future: _futureBuilderFuture,
           builder: (BuildContext context, AsyncSnapshot snapshot) {
@@ -92,7 +100,14 @@ class _BlackListPageState extends State<BlackListPage> {
                           itemCount: list.length,
                           itemBuilder: (BuildContext context, int index) {
                             return ListTile(
-                              onTap: () {},
+                              onTap: list[index].mid == null
+                                  ? null
+                                  : () => Get.toNamed(
+                                        '/member?mid=${list[index].mid}',
+                                        arguments: {
+                                          'face': list[index].face,
+                                        },
+                                      ),
                               leading: NetworkImgLayer(
                                 width: 45,
                                 height: 45,

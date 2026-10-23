@@ -64,7 +64,13 @@ class _RcmdPageState extends State<RcmdPage>
       ),
       child: RefreshIndicator(
         onRefresh: () async {
-          await _rcmdController.onRefresh();
+          final Future future = _rcmdController.onRefresh();
+          if (mounted) {
+            setState(() {
+              _futureBuilderFuture = _rcmdController.queryRcmdFeed('init');
+            });
+          }
+          await future;
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: CustomScrollView(
@@ -78,7 +84,19 @@ class _RcmdPageState extends State<RcmdPage>
                 future: _futureBuilderFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.done) {
-                    Map data = snapshot.data as Map;
+                    final Map? data = snapshot.data as Map?;
+                    if (data == null) {
+                      return HttpError(
+                        errMsg: snapshot.error?.toString() ?? '请求异常',
+                        fn: () {
+                          setState(() {
+                            _rcmdController.isLoadingMore = true;
+                            _futureBuilderFuture =
+                                _rcmdController.queryRcmdFeed('init');
+                          });
+                        },
+                      );
+                    }
                     if (data['status']) {
                       return Obx(
                         () {
@@ -94,7 +112,7 @@ class _RcmdPageState extends State<RcmdPage>
                       );
                     } else {
                       return HttpError(
-                        errMsg: data['msg'],
+                        errMsg: data['msg'] ?? '请求异常',
                         fn: () {
                           setState(() {
                             _rcmdController.isLoadingMore = true;

@@ -51,10 +51,19 @@ class DynamicsHttp {
   static Future followUp() async {
     var res = await Request().get(Api.followUp);
     if (res.data['code'] == 0) {
-      return {
-        'status': true,
-        'data': FollowUpModel.fromJson(res.data['data']),
-      };
+      try {
+        return {
+          'status': true,
+          'data': FollowUpModel.fromJson(res.data['data']),
+        };
+      } catch (err) {
+        // 字段类型漂移（int/String 混用）不应让整个 UP 主面板变成错误卡片
+        print('followUp parse error: $err');
+        return {
+          'status': true,
+          'data': FollowUpModel(),
+        };
+      }
     } else {
       return {
         'status': false,

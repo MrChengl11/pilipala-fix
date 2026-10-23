@@ -33,6 +33,7 @@ class _HtmlRenderPageState extends State<HtmlRenderPage>
   late int type;
   bool _isFabVisible = true;
   late Future _futureBuilderFuture;
+  Future? _replyFutureBuilderFuture;
   late ScrollController scrollController;
   late AnimationController fabAnimationCtr;
 
@@ -44,7 +45,7 @@ class _HtmlRenderPageState extends State<HtmlRenderPage>
     url = Get.parameters['url']!;
     dynamicType = Get.parameters['dynamicType']!;
     type = dynamicType == 'picture' ? 11 : 12;
-    _futureBuilderFuture = _htmlRenderCtr.reqHtml(id);
+    _futureBuilderFuture = _loadContent();
     fabAnimationCtr = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -83,6 +84,23 @@ class _HtmlRenderPageState extends State<HtmlRenderPage>
         }
       },
     );
+  }
+
+  // 动态内容加载完成后再请求评论，避免每次 build 都重新发起评论请求
+  Future _loadContent() async {
+    final res = await _htmlRenderCtr.reqHtml(id);
+    if (!mounted) return res;
+    if (res is Map && res['status'] == true) {
+      setState(() {
+        _replyFutureBuilderFuture =
+            _htmlRenderCtr.queryReplyList(reqType: 'init');
+      });
+    } else {
+      setState(() {
+        _replyFutureBuilderFuture = null;
+      });
+    }
+    return res;
   }
 
   void _showFab() {
@@ -190,6 +208,16 @@ class _HtmlRenderPageState extends State<HtmlRenderPage>
                     if (snapshot.connectionState == ConnectionState.done) {
                       var data = snapshot.data;
                       fabAnimationCtr.forward();
+                      if (data is! Map) {
+                        return HttpErrorBox(
+                          errMsg: snapshot.error?.toString() ?? '请求失败',
+                          fn: () {
+                            setState(() {
+                              _futureBuilderFuture = _loadContent();
+                            });
+                          },
+                        );
+                      }
                       if (data['status']) {
                         return Column(
                           children: [
@@ -301,14 +329,29 @@ class _HtmlRenderPageState extends State<HtmlRenderPage>
                       : const SizedBox(),
                 ),
                 Obx(
-                  () => _htmlRenderCtr.oid.value != -1
+                  () => _htmlRenderCtr.oid.value != -1 &&
+                          _replyFutureBuilderFuture != null
                       ? FutureBuilder(
-                          future: _htmlRenderCtr.queryReplyList(),
+                          future: _replyFutureBuilderFuture,
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
                                 ConnectionState.done) {
-                              Map data = snapshot.data as Map;
-                              if (snapshot.data['status']) {
+                              var data = snapshot.data;
+                              if (data is! Map) {
+                                return HttpErrorBox(
+                                  errMsg:
+                                      snapshot.error?.toString() ?? '请求失败',
+                                  fn: () {
+                                    setState(() {
+                                      _replyFutureBuilderFuture =
+                                          _htmlRenderCtr.queryReplyList(
+                                        reqType: 'init',
+                                      );
+                                    });
+                                  },
+                                );
+                              }
+                              if (data['status']) {
                                 // 请求成功
                                 return Obx(
                                   () => _htmlRenderCtr.replyList.isEmpty &&
@@ -380,13 +423,16 @@ class _HtmlRenderPageState extends State<HtmlRenderPage>
                                 );
                               } else {
                                 // 请求错误
-                                return CustomScrollView(
-                                  slivers: [
-                                    HttpError(
-                                      errMsg: data['msg'],
-                                      fn: () => setState(() {}),
-                                    )
-                                  ],
+                                return HttpErrorBox(
+                                  errMsg: data['msg'] ?? '请求失败',
+                                  fn: () {
+                                    setState(() {
+                                      _replyFutureBuilderFuture =
+                                          _htmlRenderCtr.queryReplyList(
+                                        reqType: 'init',
+                                      );
+                                    });
+                                  },
                                 );
                               }
                             } else {

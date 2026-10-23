@@ -1,3 +1,5 @@
+import 'package:pilipala/models/json_field.dart';
+
 class MemberInfoModel {
   MemberInfoModel({
     this.mid,
@@ -57,13 +59,20 @@ class Vip {
   int? nicknameColor;
 
   Vip.fromJson(Map<String, dynamic> json) {
-    type = json['type'];
-    status = json['status'];
-    dueDate = json['due_date'];
-    label = json['label'];
-    nicknameColor = json['nickname_color'] == ''
-        ? null
-        : int.parse("0xFF${json['nickname_color'].replaceAll('#', '')}");
+    type = asInt(json['type']);
+    status = asInt(json['status']);
+    dueDate = asInt(json['due_date']);
+    label = asMap(json['label']);
+    // 原实现：nickname_color 为 null 时 null == '' 为 false，接着对 null 调
+    // replaceAll → NoSuchMethodError，整篇专栏/图文解析失败。
+    // 非 #RRGGBB 格式时 int.parse 也会抛，这里统一兜底。
+    final String raw = asStr(json['nickname_color']) ?? '';
+    final String hex = raw.replaceAll('#', '').trim();
+    if (hex.isEmpty) {
+      nicknameColor = null;
+    } else {
+      nicknameColor = int.tryParse('0xFF$hex');
+    }
   }
 }
 

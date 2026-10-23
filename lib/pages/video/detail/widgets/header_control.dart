@@ -558,7 +558,9 @@ class _HeaderControlState extends State<HeaderControl> {
 
   /// 选择画质
   void showSetVideoQa() {
-    final List<FormatItem> videoFormat = videoInfo.supportFormats!;
+    // support_formats 在试看/部分 durl 视频里可能缺失，原来 ! 强解会直接崩
+    final List<FormatItem> videoFormat =
+        videoInfo.supportFormats ?? <FormatItem>[];
     final VideoQuality currentVideoQa = widget.videoDetailCtr!.currentVideoQa;
 
     /// 总质量分类
@@ -632,9 +634,12 @@ class _HeaderControlState extends State<HeaderControl> {
                                   videoFormat[i].quality) {
                                 return;
                               }
-                              final int quality = videoFormat[i].quality!;
-                              widget.videoDetailCtr!.currentVideoQa =
-                                  VideoQualityCode.fromCode(quality)!;
+                              final int? quality = videoFormat[i].quality;
+                              final VideoQuality? target =
+                                  VideoQualityCode.fromCode(quality ?? 0);
+                              // 未知画质 id 原先 ! 强解会崩，取不到就忽略这次点击
+                              if (target == null) return;
+                              widget.videoDetailCtr!.currentVideoQa = target;
                               widget.videoDetailCtr!.updatePlayer();
                               Get.back();
                             },
@@ -643,9 +648,9 @@ class _HeaderControlState extends State<HeaderControl> {
                             enabled: i >= totalQaSam - userfulQaSam,
                             contentPadding:
                                 const EdgeInsets.only(left: 20, right: 20),
-                            title: Text(videoFormat[i].newDesc!),
+                            title: Text(videoFormat[i].newDesc ?? ''),
                             subtitle: Text(
-                              videoFormat[i].format!,
+                              videoFormat[i].format ?? '',
                               style: subTitleStyle,
                             ),
                             trailing: currentVideoQa.code ==
@@ -673,7 +678,8 @@ class _HeaderControlState extends State<HeaderControl> {
   /// 选择音质
   void showSetAudioQa() {
     final AudioQuality currentAudioQa = widget.videoDetailCtr!.currentAudioQa!;
-    final List<AudioItem> audio = videoInfo.dash!.audio!;
+    // durl 格式 / 解析异常时 dash 可能为 null，原来 ! 强解会让音质面板崩
+    final List<AudioItem> audio = videoInfo.dash?.audio ?? <AudioItem>[];
     showModalBottomSheet(
       context: context,
       elevation: 0,
@@ -703,18 +709,21 @@ class _HeaderControlState extends State<HeaderControl> {
                             if (currentAudioQa.code == i.id) {
                               return;
                             }
-                            final int quality = i.id!;
-                            widget.videoDetailCtr!.currentAudioQa =
-                                AudioQualityCode.fromCode(quality)!;
+                            final int? quality = i.id;
+                            // 未知音质 id 原来 ! 强解会崩，取不到就忽略这次点击
+                            final AudioQuality? target =
+                                AudioQualityCode.fromCode(quality ?? 0);
+                            if (target == null) return;
+                            widget.videoDetailCtr!.currentAudioQa = target;
                             widget.videoDetailCtr!.updatePlayer();
                             Get.back();
                           },
                           dense: true,
                           contentPadding:
                               const EdgeInsets.only(left: 20, right: 20),
-                          title: Text(i.quality!),
+                          title: Text(i.quality ?? ''),
                           subtitle: Text(
-                            i.codecs!,
+                            i.codecs ?? '',
                             style: subTitleStyle,
                           ),
                           trailing: currentAudioQa.code == i.id
@@ -742,11 +751,19 @@ class _HeaderControlState extends State<HeaderControl> {
     final VideoDecodeFormats currentDecodeFormats =
         widget.videoDetailCtr!.currentDecodeFormats!;
     final VideoItem firstVideo = widget.videoDetailCtr!.firstVideo;
-    // 当前视频可用的解码格式
-    final List<FormatItem> videoFormat = videoInfo.supportFormats!;
+    // 当前视频可用的解码格式。durl / 试看视频的 firstVideo 是空对象（quality 为
+    // null）、supportFormats 也可能缺失，原来 firstWhere + 两个 ! 会直接抛
+    // StateError / Null check，导致「选择解码格式」面板打不开。
+    final List<FormatItem> videoFormat =
+        videoInfo.supportFormats ?? <FormatItem>[];
     final List list = videoFormat
-        .firstWhere((FormatItem e) => e.quality == firstVideo.quality!.code)
-        .codecs!;
+        .firstWhere(
+          (FormatItem e) => e.quality == (firstVideo.quality?.code ?? -1),
+          orElse: () =>
+              videoFormat.isNotEmpty ? videoFormat.first : FormatItem(),
+        )
+        .codecs ??
+        <dynamic>[];
 
     showModalBottomSheet(
       context: context,
@@ -777,22 +794,29 @@ class _HeaderControlState extends State<HeaderControl> {
                       for (var i in list) ...[
                         ListTile(
                           onTap: () {
-                            if (i.startsWith(currentDecodeFormats.code)) return;
+                            if (i.toString().startsWith(
+                                currentDecodeFormats.code)) {
+                              return;
+                            }
                             widget.videoDetailCtr!.currentDecodeFormats =
-                                VideoDecodeFormatsCode.fromString(i)!;
+                                VideoDecodeFormatsCode.fromString(
+                                    i.toString())!;
                             widget.videoDetailCtr!.updatePlayer();
                             Get.back();
                           },
                           dense: true,
                           contentPadding:
                               const EdgeInsets.only(left: 20, right: 20),
-                          title: Text(VideoDecodeFormatsCode.fromString(i)!
-                              .description!),
+                          // 接口可能返回本地枚举没有的 codecs 串（如新的 av01.xxx），
+                          // 原来 fromString(i)! 会抛 null check 让整个面板渲染失败
+                          title: Text(
+                              VideoDecodeFormatsCode.fromString(i)!.description ??
+                                  ''),
                           subtitle: Text(
-                            i!,
+                            i.toString(),
                             style: subTitleStyle,
                           ),
-                          trailing: i.startsWith(currentDecodeFormats.code)
+                          trailing: i.toString().startsWith(currentDecodeFormats.code)
                               ? Icon(
                                   Icons.done,
                                   color: Theme.of(context).colorScheme.primary,

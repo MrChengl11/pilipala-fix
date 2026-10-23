@@ -166,9 +166,15 @@ class HistoryItem extends StatelessWidget {
                                     Hero(
                                       tag: heroTag,
                                       child: NetworkImgLayer(
+                                        // covers 可能为空（接口只返回 cover
+                                        // 或部分历史记录缺字段），原来的
+                                        // covers.first 会抛 StateError 让整页
+                                        // 历史记录白屏
                                         src: (videoItem.cover != ''
                                             ? videoItem.cover
-                                            : videoItem.covers.first),
+                                            : (videoItem.covers.isNotEmpty
+                                                ? videoItem.covers.first
+                                                : '')),
                                         width: maxWidth,
                                         height: maxHeight,
                                       ),
@@ -268,10 +274,13 @@ class HistoryItem extends StatelessWidget {
                                           StyleString.imgRadius.x),
                                     ),
                                     child: LinearProgressIndicator(
+                                      // value 合法域是 0.0~1.0：原来已看完写 100，
+                                      // 进度条渲染成 10000%，且可能触发断言
                                       value: videoItem.progress == -1
-                                          ? 100
-                                          : videoItem.progress /
-                                              videoItem.duration,
+                                          ? 1.0
+                                          : (videoItem.progress /
+                                                  videoItem.duration)
+                                              .clamp(0.0, 1.0),
                                     ),
                                   ),
                                 )

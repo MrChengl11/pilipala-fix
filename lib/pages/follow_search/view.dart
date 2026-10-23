@@ -84,7 +84,10 @@ class _FollowSearchPageState extends State<FollowSearchPage> {
               if (data == null) {
                 return CustomScrollView(
                   slivers: [
-                    HttpError(errMsg: snapshot.data['msg'], fn: reRequest)
+                    HttpError(
+                      errMsg: snapshot.error?.toString() ?? '请求失败',
+                      fn: reRequest,
+                    )
                   ],
                 );
               }

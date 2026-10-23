@@ -58,8 +58,16 @@ class _BangumiPageState extends State<BangumiPage>
     super.build(context);
     return RefreshIndicator(
       onRefresh: () async {
-        await _bangumidController.queryBangumiListFeed();
-        return _bangumidController.queryBangumiFollow();
+        final Future feedFuture = _bangumidController.queryBangumiListFeed();
+        final Future followFuture = _bangumidController.queryBangumiFollow();
+        if (mounted) {
+          setState(() {
+            _futureBuilderFuture = feedFuture;
+            _futureBuilderFutureFollow = followFuture;
+          });
+        }
+        await feedFuture;
+        await followFuture;
       },
       child: CustomScrollView(
         controller: _bangumidController.scrollController,
@@ -104,12 +112,21 @@ class _BangumiPageState extends State<BangumiPage>
                             (BuildContext context, AsyncSnapshot snapshot) {
                           if (snapshot.connectionState ==
                               ConnectionState.done) {
-                            if (snapshot.data == null) {
-                              return const SizedBox();
+                            final Map? data = snapshot.data as Map?;
+                            if (data == null) {
+                              return HttpErrorBox(
+                                errMsg: snapshot.error?.toString() ?? '请求异常',
+                                fn: () {
+                                  setState(() {
+                                    _futureBuilderFutureFollow =
+                                        _bangumidController
+                                            .queryBangumiFollow();
+                                  });
+                                },
+                              );
                             }
-                            Map data = snapshot.data as Map;
                             List list = _bangumidController.bangumiFollowList;
-                            if (data['status']) {
+                            if (data['status'] == true) {
                               return Obx(
                                 () => list.isNotEmpty
                                     ? ListView.builder(
@@ -141,7 +158,16 @@ class _BangumiPageState extends State<BangumiPage>
                                       ),
                               );
                             } else {
-                              return const SizedBox();
+                              return HttpErrorBox(
+                                errMsg: data['msg'] ?? '请求异常',
+                                fn: () {
+                                  setState(() {
+                                    _futureBuilderFutureFollow =
+                                        _bangumidController
+                                            .queryBangumiFollow();
+                                  });
+                                },
+                              );
                             }
                           } else {
                             return const SizedBox();

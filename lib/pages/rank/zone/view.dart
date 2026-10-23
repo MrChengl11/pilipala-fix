@@ -62,7 +62,14 @@ class _ZonePageState extends State<ZonePage>
     super.build(context);
     return RefreshIndicator(
       onRefresh: () async {
-        return await _zoneController.onRefresh();
+        final Future future = _zoneController.onRefresh();
+        if (mounted) {
+          setState(() {
+            _futureBuilderFuture =
+                _zoneController.queryRankFeed('init', widget.rid);
+          });
+        }
+        await future;
       },
       child: CustomScrollView(
         controller: _zoneController.scrollController,

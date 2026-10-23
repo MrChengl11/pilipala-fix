@@ -184,6 +184,16 @@ class _ContentState extends State<Content> {
         children: [
           if (widget.item.modules.moduleDynamic.topic != null) ...[
             GestureDetector(
+              // 话题标签进搜索结果页
+              onTap: () {
+                final String topic =
+                    (widget.item.modules.moduleDynamic.topic.name ?? '')
+                        .toString()
+                        .replaceAll('#', '')
+                        .trim();
+                if (topic.isEmpty) return;
+                Get.toNamed('/searchResult', parameters: {'keyword': topic});
+              },
               child: Text(
                 '#${widget.item.modules.moduleDynamic.topic.name}',
                 style: authorStyle,

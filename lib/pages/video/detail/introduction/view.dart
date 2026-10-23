@@ -15,7 +15,9 @@ import 'package:pilipala/common/widgets/stat/danmu.dart';
 import 'package:pilipala/common/widgets/stat/view.dart';
 import 'package:pilipala/models/video_detail_res.dart';
 import 'package:pilipala/pages/video/detail/introduction/controller.dart';
+import 'package:pilipala/http/constants.dart';
 import 'package:pilipala/pages/video/detail/widgets/ai_detail.dart';
+import 'package:pilipala/utils/download.dart';
 import 'package:pilipala/utils/feed_back.dart';
 import 'package:pilipala/utils/global_data_cache.dart';
 import 'package:pilipala/utils/storage.dart';
@@ -540,6 +542,32 @@ class _VideoInfoState extends State<VideoInfo> with TickerProviderStateMixin {
     );
   }
 
+  /// 复制视频链接（与 actionShareVideo 的分享地址保持一致）
+  void _copyVideoLink() {
+    feedBack();
+    final String? bvid = widget.videoDetail!.bvid;
+    if (bvid == null || bvid.isEmpty) {
+      SmartDialog.showToast('视频链接获取失败');
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: '$HttpString.baseUrl/video/$bvid'));
+    SmartDialog.showToast('已复制');
+  }
+
+  /// 下载视频封面原图：B 站图片地址带 @xxx.webp 后缀，去掉后缀才能下到原图
+  Future<void> _downloadCover() async {
+    feedBack();
+    final String? pic = videoIntroController.videoDetail.value.pic;
+    if (pic == null || pic.isEmpty) {
+      SmartDialog.showToast('封面获取失败');
+      return;
+    }
+    final int atIndex = pic.lastIndexOf('@');
+    final String coverUrl = atIndex > 0 ? pic.substring(0, atIndex) : pic;
+    // downloadImg 内部已有「保存中 / 已保存 / 失败」提示，此处不再重复 toast
+    await DownloadUtils.downloadImg(coverUrl);
+  }
+
   Widget actionGrid(BuildContext context, videoIntroController) {
     final actionTypeSort = GlobalDataCache().actionTypeSort;
 
@@ -589,31 +617,24 @@ class _VideoInfoState extends State<VideoInfo> with TickerProviderStateMixin {
         selectStatus: false,
         text: '分享',
       ),
-      'dislike': Obx(
-        () => ActionItem(
-          icon: const Icon(FontAwesomeIcons.thumbsDown),
-          selectIcon: const Icon(FontAwesomeIcons.solidThumbsDown),
-          onTap: () {},
-          selectStatus: videoIntroController.hasDisLike.value,
-          text: '不喜欢',
-        ),
-      ),
       'downloadCover': ActionItem(
         icon: const Icon(Icons.image_outlined),
-        onTap: () {},
+        onTap: _downloadCover,
         selectStatus: false,
         text: '下载封面',
       ),
       'copyLink': ActionItem(
         icon: const Icon(Icons.link_outlined),
-        onTap: () {},
+        onTap: _copyVideoLink,
         selectStatus: false,
         text: '复制链接',
       ),
     };
     final List<Widget> list = [];
     for (var i = 0; i < actionTypeSort.length; i++) {
-      list.add(menuListWidgets[actionTypeSort[i]]!);
+      final Widget? menuItem = menuListWidgets[actionTypeSort[i]];
+      // 老版本 hive 里可能残留已下线的操作项（如 'dislike'），取不到就跳过
+      if (menuItem != null) list.add(menuItem);
     }
 
     return LayoutBuilder(

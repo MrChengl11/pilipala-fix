@@ -66,13 +66,16 @@ class _MediaPageState extends State<MediaPage>
             ),
             for (var i in mediaController.list) ...[
               ListTile(
-                onTap: () => i['onTap'](),
+                onTap: i['onTap'] == null ? null : () => i['onTap'](),
+                enabled: i['onTap'] != null,
                 dense: true,
                 leading: Padding(
                   padding: const EdgeInsets.only(left: 15),
                   child: Icon(
                     i['icon'],
-                    color: primary,
+                    color: i['onTap'] == null
+                        ? Theme.of(context).colorScheme.outline
+                        : primary,
                   ),
                 ),
                 contentPadding:
@@ -80,8 +83,22 @@ class _MediaPageState extends State<MediaPage>
                 minLeadingWidth: 0,
                 title: Text(
                   i['title'],
-                  style: const TextStyle(fontSize: 15),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: i['onTap'] == null
+                        ? Theme.of(context).colorScheme.outline
+                        : null,
+                  ),
                 ),
+                trailing: i['onTap'] == null
+                    ? Text(
+                        '暂未支持',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                      )
+                    : null,
               ),
             ],
             Obx(() => mediaController.userLogin.value

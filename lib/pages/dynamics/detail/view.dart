@@ -91,6 +91,7 @@ class _DynamicDetailPageState extends State<DynamicDetailPage>
                 DynamicDetailController(oid, replyType),
                 tag: opusId.toString());
             await _dynamicDetailController.reqHtmlByOpusId(opusId!);
+            _futureBuilderFuture = _dynamicDetailController.queryReplyList();
             setState(() {});
           }
         } else {
@@ -101,8 +102,8 @@ class _DynamicDetailPageState extends State<DynamicDetailPage>
     if (!isOpusId) {
       _dynamicDetailController =
           Get.put(DynamicDetailController(oid, replyType), tag: oid.toString());
+      _futureBuilderFuture = _dynamicDetailController.queryReplyList();
     }
-    _futureBuilderFuture = _dynamicDetailController.queryReplyList();
   }
 
   // 查看二级评论
@@ -165,6 +166,12 @@ class _DynamicDetailPageState extends State<DynamicDetailPage>
     );
   }
 
+  void _retry() {
+    setState(() {
+      _futureBuilderFuture = _dynamicDetailController.queryReplyList();
+    });
+  }
+
   void _showFab() {
     if (!_isFabVisible) {
       _isFabVisible = true;
@@ -211,7 +218,13 @@ class _DynamicDetailPageState extends State<DynamicDetailPage>
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await _dynamicDetailController.queryReplyList();
+          final Future future = _dynamicDetailController.queryReplyList();
+          if (mounted) {
+            setState(() {
+              _futureBuilderFuture = future;
+            });
+          }
+          await future;
         },
         child: CustomScrollView(
           controller: scrollController,
@@ -278,8 +291,14 @@ class _DynamicDetailPageState extends State<DynamicDetailPage>
               future: _futureBuilderFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.done) {
-                  Map data = snapshot.data as Map;
-                  if (snapshot.data['status']) {
+                  var data = snapshot.data;
+                  if (data is! Map) {
+                    return HttpError(
+                      errMsg: snapshot.error?.toString() ?? '请求失败',
+                      fn: _retry,
+                    );
+                  }
+                  if (data['status']) {
                     RxList<ReplyItemModel> replyList =
                         _dynamicDetailController.replyList;
                     // 请求成功
@@ -345,8 +364,8 @@ class _DynamicDetailPageState extends State<DynamicDetailPage>
                   } else {
                     // 请求错误
                     return HttpError(
-                      errMsg: data['msg'],
-                      fn: () => setState(() {}),
+                      errMsg: data['msg'] ?? '请求失败',
+                      fn: _retry,
                     );
                   }
                 } else {

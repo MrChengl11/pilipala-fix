@@ -44,6 +44,13 @@ class _MemberDynamicsPageState extends State<MemberDynamicsPage> {
     );
   }
 
+  void _retry() {
+    setState(() {
+      _futureBuilderFuture =
+          _memberDynamicController.getMemberDynamic('onRefresh');
+    });
+  }
+
   @override
   void dispose() {
     _memberDynamicController.scrollController.removeListener(() {});
@@ -84,14 +91,14 @@ class _MemberDynamicsPageState extends State<MemberDynamicsPage> {
                     );
                   } else {
                     return HttpError(
-                      errMsg: snapshot.data['msg'],
-                      fn: () {},
+                      errMsg: snapshot.data['msg'] ?? '请求失败',
+                      fn: _retry,
                     );
                   }
                 } else {
                   return HttpError(
-                    errMsg: snapshot.data['msg'],
-                    fn: () {},
+                    errMsg: snapshot.error?.toString() ?? '请求失败',
+                    fn: _retry,
                   );
                 }
               } else {

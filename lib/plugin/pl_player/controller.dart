@@ -362,6 +362,9 @@ class PlPlayerController {
       }
 
       if (_playerCount.value == 0) {
+        // 计数为 0 说明共享播放器实例已被释放（当前页面仍持有旧实例）。
+        // 此时继续初始化没有任何意义，直接置错误态，让 UI 显示可见提示而不是永久 loading。
+        dataStatus.status.value = DataStatus.error;
         return;
       }
       // 配置Player 音轨、字幕等等
@@ -599,6 +602,13 @@ class PlPlayerController {
           isBuffering.value = event;
           videoPlayerServiceHandler.onStatusChange(
               playerStatus.status.value, event);
+        }),
+        // 播放器内部错误（解码失败/网络中断等）：置错误态并清除缓冲标记，
+        // 否则 UI 会一直停在 loading 遮罩里转圈。
+        videoPlayerController!.stream.error.listen((String event) {
+          debugPrint('plPlayer stream error: $event');
+          isBuffering.value = false;
+          dataStatus.status.value = DataStatus.error;
         }),
         // videoPlayerController!.stream.volume.listen((event) {
         //   if (!mute.value && _volumeBeforeMute != event) {
@@ -993,6 +1003,7 @@ class PlPlayerController {
     timerForTrackingMouse?.cancel();
     _timerForSeek?.cancel();
     videoFitChangedTimer?.cancel();
+    _timerForShowingVolume?.cancel();
   }
 
   // 记录播放记录
@@ -1081,6 +1092,8 @@ class PlPlayerController {
       timerForTrackingMouse?.cancel();
       _timerForSeek?.cancel();
       videoFitChangedTimer?.cancel();
+      // 音量提示与双指手势用的短定时器原来漏取消，退出页面后仍会写已释放的 Rx
+      _timerForShowingVolume?.cancel();
       // _position.close();
       _playerEventSubs?.cancel();
       // _sliderPosition.close();

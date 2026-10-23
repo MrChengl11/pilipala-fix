@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/widgets/network_img_layer.dart';
 import 'package:pilipala/models/read/opus.dart';
@@ -96,13 +97,22 @@ class _OpusPageState extends State<OpusPage> {
       future: _futureBuilderFuture,
       builder: (BuildContext context, AsyncSnapshot snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
+          // data == null 说明接口抛异常，原来返回空 SizedBox 整页白屏
           if (snapshot.data == null) {
-            return const SizedBox();
+            return _buildError(
+              snapshot.error?.toString() ?? '加载失败，请检查网络后重试',
+            );
           }
-          if (snapshot.data['status']) {
+          if (snapshot.data['status'] == true) {
             return _buildContent(controller.opusData.value);
           } else {
-            return _buildError(snapshot.data['message']);
+            // http 层失败分支返回的键是 'msg'，原来读 'message' 得到 null，
+            // 传给非空 String 形参直接 TypeError（断网进图文必红屏）
+            final String msg = (snapshot.data['msg'] ??
+                    snapshot.data['message'] ??
+                    '加载失败')
+                .toString();
+            return _buildError(msg);
           }
         } else {
           return _buildLoading();
@@ -115,23 +125,31 @@ class _OpusPageState extends State<OpusPage> {
     if (opusData.detail == null) {
       return const SizedBox();
     }
-    final modules = opusData.detail!.modules!;
-    late ModuleContent moduleContent;
+    // modules 可能为 null（接口只返回部分模块），
+    // 原来 detail!.modules! 会抛空指针让整篇图文白屏
+    final List<OpusModuleDataModel>? modules = opusData.detail!.modules;
+    if (modules == null) {
+      return _buildError('图文内容缺失');
+    }
+    // 原来用 late ModuleContent，找不到 moduleContent 时下面
+    // moduleContent.paragraphs 会抛 LateInitializationError 直接崩
+    ModuleContent? moduleContent;
     // 获取所有的图片链接
     final List<String> picList = [];
     final int moduleIndex =
         modules.indexWhere((module) => module.moduleContent != null);
     if (moduleIndex != -1) {
-      moduleContent = modules[moduleIndex].moduleContent!;
-      for (var paragraph in moduleContent.paragraphs!) {
-        if (paragraph.paraType == 2) {
-          for (var pic in paragraph.pic!.pics!) {
-            picList.add(pic.url!);
-          }
+      moduleContent = modules[moduleIndex].moduleContent;
+    }
+    if (moduleContent == null) {
+      return _buildError('图文内容缺失');
+    }
+    for (var paragraph in moduleContent.paragraphs ?? <ModuleParagraph>[]) {
+      if (paragraph.paraType == 2) {
+        for (var pic in paragraph.pic?.pics ?? <Pic>[]) {
+          if (pic.url != null) picList.add(pic.url!);
         }
       }
-    } else {
-      print('No moduleContent found');
     }
 
     return Padding(
@@ -149,7 +167,7 @@ class _OpusPageState extends State<OpusPage> {
             padding: const EdgeInsets.only(bottom: 20),
             child: _buildAuthorWidget(opusData),
           ),
-          ...moduleContent.paragraphs!.map(
+          ...(moduleContent.paragraphs ?? <ModuleParagraph>[]).map(
             (ModuleParagraph paragraph) {
               return Column(
                 children: [
@@ -206,7 +224,8 @@ class _OpusPageState extends State<OpusPage> {
   }
 
   Widget _buildAuthorWidget(OpusDataModel opusData) {
-    final modules = opusData.detail!.modules!;
+    final List<OpusModuleDataModel> modules =
+        opusData.detail?.modules ?? <OpusModuleDataModel>[];
     late ModuleAuthor moduleAuthor;
     final int moduleIndex =
         modules.indexWhere((module) => module.moduleAuthor != null);
@@ -228,12 +247,12 @@ class _OpusPageState extends State<OpusPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              moduleAuthor.name!,
+              moduleAuthor.name ?? '',
               style: const TextStyle(
                 fontWeight: FontWeight.w500,
               ),
             ),
-            StyledText(moduleAuthor.pubTime!),
+            StyledText(moduleAuthor.pubTime ?? ''),
           ],
         ),
       ],
@@ -241,24 +260,54 @@ class _OpusPageState extends State<OpusPage> {
   }
 
   Widget _buildStatsWidget(OpusDataModel opusData) {
-    final modules = opusData.detail!.modules!;
-    final ModuleStat moduleStat = modules.last.moduleStat!;
+    // modules 为空 / 末尾模块没有 moduleStat / 各计数为 null
+    // 都会让原来那行强解直接抛，整篇图文页白屏崩掉
+    final List<OpusModuleDataModel> modules =
+        opusData.detail?.modules ?? <OpusModuleDataModel>[];
+    final int statIndex =
+        modules.lastIndexWhere((module) => module.moduleStat != null);
+    if (statIndex == -1) return const SizedBox();
+    final ModuleStat moduleStat = modules[statIndex].moduleStat!;
     return Row(
       children: [
-        StyledText('${moduleStat.comment!.count}评论'),
+        StyledText('${moduleStat.comment?.count ?? 0}评论'),
         const SizedBox(width: 10),
-        StyledText('${moduleStat.like!.count}赞'),
+        StyledText('${moduleStat.like?.count ?? 0}赞'),
         const SizedBox(width: 10),
-        StyledText('${moduleStat.favorite!.count}转发'),
+        StyledText('${moduleStat.favorite?.count ?? 0}转发'),
       ],
     );
   }
 
-  Widget _buildError(String message) {
+  Widget _buildError(String? message) {
     return SizedBox(
-      height: 100,
+      height: 300,
       child: Center(
-        child: Text(message),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SvgPicture.asset('assets/images/error.svg', height: 160),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                message ?? '请求异常',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonal(
+              onPressed: () {
+                setState(() {
+                  _futureBuilderFuture = controller.fetchOpusData();
+                });
+              },
+              child: const Text('点击重试'),
+            ),
+          ],
+        ),
       ),
     );
   }

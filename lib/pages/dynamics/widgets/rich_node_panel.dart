@@ -15,14 +15,17 @@ InlineSpan richNode(item, context) {
     dynamic richTextNodes;
     if (item.modules.moduleDynamic.desc != null) {
       richTextNodes = item.modules.moduleDynamic.desc.richTextNodes;
-    } else if (item.modules.moduleDynamic.major != null) {
+    } else if (item.modules.moduleDynamic.major?.opus != null) {
       // 动态页面 richTextNodes 层级可能与主页动态层级不同
-      richTextNodes =
-          item.modules.moduleDynamic.major.opus.summary.richTextNodes;
-      if (item.modules.moduleDynamic.major.opus.title != null) {
+      // major.opus.summary 可能为 null（图文类动态没有 summary 字段），
+      // 原来直接 .summary.richTextNodes 会抛
+      // NoSuchMethodError: The getter 'summary' was called on null
+      final opus = item.modules.moduleDynamic.major.opus;
+      richTextNodes = opus.summary?.richTextNodes;
+      if (opus.title != null) {
         spanChilds.add(
           TextSpan(
-            text: item.modules.moduleDynamic.major.opus.title + '\n',
+            text: '${opus.title}\n',
             style: Theme.of(context)
                 .textTheme
                 .titleMedium!
@@ -65,11 +68,19 @@ InlineSpan richNode(item, context) {
         }
         // 话题
         if (i.type == 'RICH_TEXT_NODE_TYPE_TOPIC') {
+          // 去掉 # 后作为关键词进搜索结果页
+          final String topicKeyword = (i.text ?? i.origText ?? '')
+              .toString()
+              .replaceAll('#', '')
+              .trim();
           spanChilds.add(
             WidgetSpan(
               alignment: PlaceholderAlignment.middle,
               child: GestureDetector(
-                onTap: () {},
+                onTap: topicKeyword.isEmpty
+                    ? null
+                    : () => Get.toNamed('/searchResult',
+                        parameters: {'keyword': topicKeyword}),
                 child: Text(
                   '${i.origText}',
                   style: authorStyle,
@@ -155,6 +166,7 @@ InlineSpan richNode(item, context) {
         }
         // 抽奖
         if (i.type == 'RICH_TEXT_NODE_TYPE_LOTTERY') {
+          final String lotteryRid = (i.rid ?? '').toString().trim();
           spanChilds.add(
             WidgetSpan(
               alignment: PlaceholderAlignment.middle,
@@ -169,7 +181,18 @@ InlineSpan richNode(item, context) {
             WidgetSpan(
               alignment: PlaceholderAlignment.middle,
               child: GestureDetector(
-                onTap: () {},
+                // rid 为抽奖活动 id，Web 端抽奖活动页
+                onTap: lotteryRid.isEmpty
+                    ? null
+                    : () => Get.toNamed(
+                          '/webview',
+                          parameters: {
+                            'url':
+                                'https://www.bilibili.com/h5/lottery/$lotteryRid',
+                            'type': 'url',
+                            'pageTitle': '抽奖'
+                          },
+                        ),
                 child: Text(
                   '${i.origText} ',
                   style: authorStyle,
@@ -179,8 +202,9 @@ InlineSpan richNode(item, context) {
           );
         }
 
-        /// TODO 商品
+        // 商品
         if (i.type == 'RICH_TEXT_NODE_TYPE_GOODS') {
+          final String goodsJumpUrl = (i.jumpUrl ?? '').toString().trim();
           spanChilds.add(
             WidgetSpan(
               alignment: PlaceholderAlignment.middle,
@@ -194,13 +218,26 @@ InlineSpan richNode(item, context) {
           spanChilds.add(
             WidgetSpan(
               alignment: PlaceholderAlignment.middle,
-              child: GestureDetector(
-                onTap: () {},
-                child: Text(
-                  '${i.text} ',
-                  style: authorStyle,
-                ),
-              ),
+              // 没有跳转地址时只渲染普通文本，避免出现点了没反应的假入口
+              child: goodsJumpUrl.isEmpty
+                  ? Text(
+                      '${i.text} ',
+                      style: authorStyle,
+                    )
+                  : GestureDetector(
+                      onTap: () => Get.toNamed(
+                        '/webview',
+                        parameters: {
+                          'url': goodsJumpUrl,
+                          'type': 'url',
+                          'pageTitle': '商品'
+                        },
+                      ),
+                      child: Text(
+                        '${i.text} ',
+                        style: authorStyle,
+                      ),
+                    ),
             ),
           );
         }

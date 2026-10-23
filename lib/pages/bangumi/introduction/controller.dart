@@ -78,7 +78,12 @@ class BangumiIntroController extends GetxController {
     var result = await SearchHttp.bangumiInfo(seasonId: seasonId, epId: epId);
     if (result['status']) {
       bangumiDetail.value = result['data'];
-      epId = bangumiDetail.value.episodes!.first.id;
+      // episodes 可能为空（番剧未上映 / 接口只返回简介），
+      // 原来 .first 直接抛 StateError，简介页整块不渲染
+      final episodes = bangumiDetail.value.episodes;
+      if (episodes != null && episodes.isNotEmpty && episodes.first.id != null) {
+        epId = episodes.first.id!;
+      }
     }
     return result;
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:pilipala/utils/utils.dart';
 
 import 'pic_panel.dart';
@@ -17,7 +18,9 @@ Widget articlePanel(item, context, {floor = 1}) {
           Row(
             children: [
               GestureDetector(
-                onTap: () {},
+                onTap: () => Get.toNamed(
+                    '/member?mid=${item.modules.moduleAuthor.mid}',
+                    arguments: {'face': item.modules.moduleAuthor.face}),
                 child: Text(
                   '@${item.modules.moduleAuthor.name}',
                   style: authorStyle,

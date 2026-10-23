@@ -4,7 +4,10 @@ import 'package:get/get.dart';
 import 'package:pilipala/common/widgets/network_img_layer.dart';
 import 'package:pilipala/http/search.dart';
 
-/// TODO 点击跳转
+/// 转折发动态里的附加卡片（UGC/预约/商品/比赛/游戏）
+/// - UGC：跳投稿视频
+/// - 预约：跳预约活动页（优先 reserve.jump_url，缺失则用 rid 拼活动页）
+/// - 商品/比赛/游戏/投票：接口字段尚不稳定，暂不渲染（返回 SizedBox，不保留假入口）
 Widget addWidget(item, context, type, {floor = 1}) {
   Map<dynamic, dynamic> dynamicProperty = {
     'ADDITIONAL_TYPE_UGC': item.modules.moduleDynamic.additional.ugc,
@@ -82,55 +85,79 @@ Widget addWidget(item, context, type, {floor = 1}) {
         ),
       );
     case 'ADDITIONAL_TYPE_RESERVE':
-      return dynamicProperty[type].state != -1
-          ? dynamicProperty[type].title != null
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: InkWell(
-                    onTap: () {},
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.only(
-                          left: 12, top: 10, right: 12, bottom: 10),
-                      color: bgColor,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            dynamicProperty[type].title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 1),
-                          Text.rich(
-                            TextSpan(
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.outline,
-                                  fontSize: Theme.of(context)
-                                      .textTheme
-                                      .labelMedium!
-                                      .fontSize),
-                              children: [
-                                if (dynamicProperty[type].desc1 != null)
-                                  TextSpan(
-                                      text:
-                                          dynamicProperty[type].desc1['text']),
-                                const TextSpan(text: '  '),
-                                if (dynamicProperty[type].desc2 != null)
-                                  TextSpan(
-                                      text:
-                                          dynamicProperty[type].desc2['text']),
-                              ],
+      {
+        // additional.reserve 可能整体为空，先取出来判空，避免对 null 取 .state 崩
+        final dynamic reserveItem = dynamicProperty[type];
+        if (reserveItem == null) return const SizedBox();
+        return dynamicProperty[type].state != -1
+            ? dynamicProperty[type].title != null
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: InkWell(
+                      // 预约卡：优先用接口给的 jump_url，缺失时用 rid 拼预约活动页
+                      onTap: () {
+                        final String reserveJumpUrl =
+                            (reserveItem.jumpUrl ?? '').toString().trim();
+                        final String reserveUrl = reserveJumpUrl.isNotEmpty
+                            ? reserveJumpUrl
+                            : reserveItem.rid != null
+                                ? 'https://www.bilibili.com/blackboard/activity-reserve.html?oid=${reserveItem.rid}&type=2'
+                                : '';
+                        if (reserveUrl.isEmpty) return;
+                        Get.toNamed(
+                          '/webview',
+                          parameters: {
+                            'url': reserveUrl,
+                            'type': 'url',
+                            'pageTitle': '预约'
+                          },
+                        );
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.only(
+                            left: 12, top: 10, right: 12, bottom: 10),
+                        color: bgColor,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              dynamicProperty[type].title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          )
-                        ],
+                            const SizedBox(height: 1),
+                            Text.rich(
+                              TextSpan(
+                                style: TextStyle(
+                                    color:
+                                        Theme.of(context).colorScheme.outline,
+                                    fontSize: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium!
+                                        .fontSize),
+                                children: [
+                                  if (dynamicProperty[type].desc1 != null)
+                                    TextSpan(
+                                        text: dynamicProperty[type]
+                                            .desc1['text']),
+                                  const TextSpan(text: '  '),
+                                  if (dynamicProperty[type].desc2 != null)
+                                    TextSpan(
+                                        text: dynamicProperty[type]
+                                            .desc2['text']),
+                                ],
+                              ),
+                            )
+                          ],
+                        ),
+                        // TextButton(onPressed: () {}, child: Text('123'))
                       ),
-                      // TextButton(onPressed: () {}, child: Text('123'))
                     ),
-                  ),
-                )
-              : const SizedBox()
-          : const SizedBox();
+                  )
+                : const SizedBox()
+            : const SizedBox();
+      }
     case 'ADDITIONAL_TYPE_GOODS':
       // 商品
       return const SizedBox();
@@ -195,6 +222,7 @@ Widget addWidget(item, context, type, {floor = 1}) {
     case 'ADDITIONAL_TYPE_VOTE':
       return const SizedBox();
     default:
-      return const Text('11');
+      // 原来是调试用的 const Text('11')，会在动态卡片上渲染出裸字符串
+      return const SizedBox.shrink();
   }
 }

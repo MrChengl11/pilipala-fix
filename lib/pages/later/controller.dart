@@ -113,6 +113,11 @@ class LaterController extends GetxController {
 
   // 稍后再看播放全部
   Future toViewPlayAll() async {
+    // 列表为空时（刚清空过 / 接口返回空）点「播放全部」会 StateError
+    if (laterList.isEmpty) {
+      SmartDialog.showToast('列表为空');
+      return;
+    }
     final HotVideoItemModel firstItem = laterList.first;
     final String heroTag = Utils.makeHeroTag(firstItem.bvid);
     Get.toNamed(

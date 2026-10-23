@@ -843,7 +843,15 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ),
         //
         Obx(() {
-          if (_.dataStatus.loading || _.isBuffering.value) {
+          // 错误态优先：出错时即使缓冲标记仍为 true，也要显示错误提示而不是一直转圈
+          if (_.dataStatus.error) {
+            return const Center(
+              child: Text(
+                '播放失败，请返回重试',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+            );
+          } else if (_.dataStatus.loading || _.isBuffering.value) {
             return Center(
               child: Container(
                 padding: const EdgeInsets.all(30),
@@ -857,14 +865,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   'assets/loading.json',
                   width: 200,
                 ),
-              ),
-            );
-          } else if (_.dataStatus.error) {
-            // 数据源准备失败时给出可见提示，避免只剩黑屏
-            return const Center(
-              child: Text(
-                '播放失败，请返回重试',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
             );
           } else {

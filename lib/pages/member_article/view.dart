@@ -59,7 +59,7 @@ class _MemberArticlePageState extends State<MemberArticlePage> {
             if (snapshot.data != null) {
               return _buildContent(snapshot.data as Map);
             } else {
-              return _buildError(snapshot.data['msg']);
+              return _buildError(snapshot.error?.toString() ?? '请求失败');
             }
           } else {
             return ListView.builder(
@@ -137,15 +137,18 @@ class _MemberArticlePageState extends State<MemberArticlePage> {
     );
   }
 
-  Widget _buildError(String errMsg) {
+  Widget _buildError(String? errMsg) {
     return CustomScrollView(
       physics: const NeverScrollableScrollPhysics(),
       slivers: [
-        SliverToBoxAdapter(
-          child: HttpError(
-            errMsg: errMsg,
-            fn: () {},
-          ),
+        HttpError(
+          errMsg: errMsg ?? '请求失败',
+          fn: () {
+            setState(() {
+              _futureBuilderFuture =
+                  _memberArticleController.getMemberArticle('init');
+            });
+          },
         ),
       ],
     );

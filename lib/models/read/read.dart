@@ -1,3 +1,4 @@
+import 'package:pilipala/models/json_field.dart';
 import 'package:pilipala/models/member/info.dart';
 
 import 'opus.dart';
@@ -24,25 +25,16 @@ class ReadDataModel {
   bool? isModern;
 
   ReadDataModel.fromJson(Map<String, dynamic> json) {
-    cvid = json['cvid'];
-    readInfo =
-        json['readInfo'] != null ? ReadInfo.fromJson(json['readInfo']) : null;
-    readViewInfo = json['readViewInfo'];
-    upInfo = json['upInfo'];
-    if (json['catalogList'] != null) {
-      catalogList = <dynamic>[];
-      json['catalogList'].forEach((v) {
-        catalogList!.add(v);
-      });
-    }
-    if (json['recommendInfoList'] != null) {
-      recommendInfoList = <dynamic>[];
-      json['recommendInfoList'].forEach((v) {
-        recommendInfoList!.add(v);
-      });
-    }
-    hiddenInteraction = json['hiddenInteraction'];
-    isModern = json['isModern'];
+    cvid = asInt(json['cvid']);
+    final Map<String, dynamic>? readInfoJson = asMap(json['readInfo']);
+    readInfo = readInfoJson != null ? ReadInfo.fromJson(readInfoJson) : null;
+    readViewInfo = asMap(json['readViewInfo']);
+    upInfo = asMap(json['upInfo']);
+    catalogList = json['catalogList'] is List ? json['catalogList'] : <dynamic>[];
+    recommendInfoList =
+        json['recommendInfoList'] is List ? json['recommendInfoList'] : <dynamic>[];
+    hiddenInteraction = asBool(json['hiddenInteraction']);
+    isModern = asBool(json['isModern']);
   }
 }
 
@@ -86,28 +78,29 @@ class ReadInfo {
   int? totalArtNum;
 
   ReadInfo.fromJson(Map<String, dynamic> json) {
-    id = json['id'];
-    category = json['category'];
-    title = json['title'];
-    summary = json['summary'];
-    bannerUrl = json['banner_url'];
-    author = Author.fromJson(json['author']);
-    publishTime = json['publish_time'];
-    ctime = json['ctime'];
-    mtime = json['mtime'];
-    stats = json['stats'];
-    attributes = json['attributes'];
-    words = json['words'];
-    if (json['origin_image_urls'] != null) {
-      originImageUrls = <String>[];
-      json['origin_image_urls'].forEach((v) {
-        originImageUrls!.add(v);
-      });
-    }
-    content = json['content'];
-    opus = json['opus'] != null ? Opus.fromJson(json['opus']) : null;
-    dynIdStr = json['dyn_id_str'];
-    totalArtNum = json['total_art_num'];
+    id = asInt(json['id']);
+    category = asMap(json['category']);
+    title = asStr(json['title']);
+    summary = asStr(json['summary']);
+    bannerUrl = asStr(json['banner_url']);
+    // author 在部分老文章里缺失，原实现无条件 Author.fromJson(null) 会直接抛
+    final Map<String, dynamic>? authorJson = asMap(json['author']);
+    author = authorJson != null ? Author.fromJson(authorJson) : null;
+    publishTime = asInt(json['publish_time']);
+    ctime = asInt(json['ctime']);
+    mtime = asInt(json['mtime']);
+    stats = asMap(json['stats']);
+    attributes = asInt(json['attributes']);
+    words = asInt(json['words']);
+    final dynamic originImages = json['origin_image_urls'];
+    originImageUrls = originImages is List
+        ? originImages.map((e) => asStr(e) ?? '').toList()
+        : <String>[];
+    content = asStr(json['content']);
+    final Map<String, dynamic>? opusJson = asMap(json['opus']);
+    opus = opusJson != null ? Opus.fromJson(opusJson) : null;
+    dynIdStr = asStr(json['dyn_id_str']);
+    totalArtNum = asInt(json['total_art_num']);
   }
 }
 
@@ -129,12 +122,13 @@ class Author {
   int? level;
 
   Author.fromJson(Map<String, dynamic> json) {
-    mid = json['mid'];
-    name = json['name'];
-    face = json['face'];
-    vip = json['vip'] != null ? Vip.fromJson(json['vip']) : null;
-    fans = json['fans'];
-    level = json['level'];
+    mid = asInt(json['mid']);
+    name = asStr(json['name']);
+    face = asStr(json['face']);
+    final Map<String, dynamic>? vipJson = asMap(json['vip']);
+    vip = vipJson != null ? Vip.fromJson(vipJson) : null;
+    fans = asInt(json['fans']);
+    level = asInt(json['level']);
   }
 }
 
@@ -260,11 +254,11 @@ class Opus {
   Content? content;
 
   Opus.fromJson(Map<String, dynamic> json) {
-    opusId = json['opus_id'];
-    opusSource = json['opus_source'];
-    title = json['title'];
-    content =
-        json['content'] != null ? Content.fromJson(json['content']) : null;
+    opusId = asInt(json['opus_id']);
+    opusSource = asInt(json['opus_source']);
+    title = asStr(json['title']);
+    final Map<String, dynamic>? contentJson = asMap(json['content']);
+    content = contentJson != null ? Content.fromJson(contentJson) : null;
   }
 }
 
@@ -276,11 +270,13 @@ class Content {
   List<ModuleParagraph>? paragraphs;
 
   Content.fromJson(Map<String, dynamic> json) {
-    if (json['paragraphs'] != null) {
-      paragraphs = <ModuleParagraph>[];
-      json['paragraphs'].forEach((v) {
-        paragraphs!.add(ModuleParagraph.fromJson(v));
-      });
+    paragraphs = <ModuleParagraph>[];
+    for (final Map<String, dynamic> item in asMapList(json['paragraphs'])) {
+      try {
+        paragraphs!.add(ModuleParagraph.fromJson(item));
+      } catch (_) {
+        // 单个段落结构异常时跳过，正文其余部分照常显示
+      }
     }
   }
 }

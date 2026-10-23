@@ -179,8 +179,17 @@ class DynamicsController extends GetxController {
 
         break;
       case 'DYNAMIC_TYPE_PGC':
-        print('番剧');
-        SmartDialog.showToast('暂未支持的类型，请联系开发者');
+      /// 番剧查看（PGC 与 PGC_UNION 的卡片结构一致，major.pgc 里带 epid）
+      case 'DYNAMIC_TYPE_PGC_UNION':
+        final DynamicArchiveModel? pgc =
+            item.modules.moduleDynamic.major.pgc;
+        if (pgc?.epid != null) {
+          RoutePush.bangumiPush(null, pgc!.epid);
+        } else if (pgc?.seasonId != null) {
+          RoutePush.bangumiPush(pgc!.seasonId, null);
+        } else {
+          SmartDialog.showToast('番剧信息缺失，无法打开');
+        }
         break;
 
       /// 纯文字动态查看
@@ -209,23 +218,32 @@ class DynamicsController extends GetxController {
 
       /// 合集查看
       case 'DYNAMIC_TYPE_UGC_SEASON':
-        DynamicArchiveModel ugcSeason =
+        DynamicArchiveModel? ugcSeason =
             item.modules.moduleDynamic.major.ugcSeason;
-        int aid = ugcSeason.aid!;
-        String bvid = IdUtils.av2bv(aid);
-        String cover = ugcSeason.cover!;
-        int cid = await SearchHttp.ab2c(bvid: bvid);
-        Get.toNamed('/video?bvid=$bvid&cid=$cid',
-            arguments: {'pic': cover, 'heroTag': bvid});
+        // 合集卡有时只有 bvid、有时只有 aid，原来 aid! 强解会崩
+        final int? seasonAid = ugcSeason?.aid;
+        final String? seasonBvid =
+            (ugcSeason?.bvid?.isNotEmpty ?? false) ? ugcSeason!.bvid : null;
+        final String? resolvedBvid =
+            seasonBvid ?? (seasonAid != null ? IdUtils.av2bv(seasonAid) : null);
+        if (resolvedBvid == null) {
+          SmartDialog.showToast('合集信息缺失，无法打开');
+          break;
+        }
+        final String cover = ugcSeason?.cover ?? '';
+        try {
+          final int cid = await SearchHttp.ab2c(bvid: resolvedBvid);
+          Get.toNamed('/video?bvid=$resolvedBvid&cid=$cid',
+              arguments: {'pic': cover, 'heroTag': resolvedBvid});
+        } catch (err) {
+          SmartDialog.showToast('合集视频获取失败');
+        }
         break;
 
-      /// 番剧查看
-      case 'DYNAMIC_TYPE_PGC_UNION':
-        print('DYNAMIC_TYPE_PGC_UNION 番剧');
-        DynamicArchiveModel pgc = item.modules.moduleDynamic.major.pgc;
-        if (pgc.epid != null) {
-          RoutePush.bangumiPush(null, pgc.epid);
-        }
+      default:
+        // 兜底：未识别的动态类型至少让用户看到原始详情，而不是点了没反应
+        Get.toNamed('/dynamicDetail',
+            arguments: {'item': item, 'floor': floor});
         break;
     }
   }

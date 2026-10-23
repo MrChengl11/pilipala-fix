@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:pilipala/http/user.dart';
@@ -12,11 +11,9 @@ class MediaController extends GetxController {
   RxBool userLogin = false.obs;
   List list = [
     {
+      // 离线缓存尚未实现：不提供 onTap，入口按不可点击样式渲染
       'icon': Icons.file_download_outlined,
       'title': '离线缓存',
-      'onTap': () {
-        SmartDialog.showToast('功能开发中');
-      },
     },
     {
       'icon': Icons.history,
@@ -54,12 +51,16 @@ class MediaController extends GetxController {
     if (!userLogin.value) {
       return {'status': false, 'data': [], 'msg': '未登录'};
     }
-    var res = await await UserHttp.userfavFolder(
+    var res = await UserHttp.userfavFolder(
       pn: 1,
       ps: 5,
       mid: mid ?? GStrorage.userInfo.get('userInfoCache').mid,
     );
-    favFolderData.value = res['data'];
+    // 接口失败时 res['data'] 是空 List，赋给 Rx<FavFolderData>
+    // 会抛 type 'List<dynamic>' is not a subtype of type 'FavFolderData'
+    if (res['status'] == true && res['data'] is FavFolderData) {
+      favFolderData.value = res['data'];
+    }
     return res;
   }
 }

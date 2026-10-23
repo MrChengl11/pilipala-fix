@@ -70,7 +70,14 @@ class _SubPageState extends State<SubPage> {
               } else {
                 return const CustomScrollView(
                   physics: NeverScrollableScrollPhysics(),
-                  slivers: [HttpError(errMsg: '', btnText: '没有数据', fn: null)],
+                  slivers: [
+                    HttpError(
+                      errMsg: '暂无订阅',
+                      btnText: '没有数据',
+                      isShowBtn: false,
+                      fn: null,
+                    )
+                  ],
                 );
               }
             } else {

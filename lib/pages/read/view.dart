@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/widgets/html_render.dart';
 import 'package:pilipala/common/widgets/http_error.dart';
@@ -6,6 +7,7 @@ import 'package:pilipala/common/widgets/network_img_layer.dart';
 import 'package:pilipala/models/read/opus.dart';
 import 'package:pilipala/models/read/read.dart';
 import 'package:pilipala/pages/opus/text_helper.dart';
+import 'package:pilipala/pages/opus/widgets/module_view.dart';
 import 'package:pilipala/utils/utils.dart';
 import 'controller.dart';
 
@@ -121,10 +123,15 @@ class _ReadPageState extends State<ReadPage> {
               },
             );
           }
-          if (snapshot.data['status']) {
+          if (snapshot.data['status'] == true) {
             return _buildContent(snapshot.data['data']);
           } else {
-            return _buildError(snapshot.data['message']);
+            // http 层失败分支返回 'msg'（lib/http/read.dart:97/:99/:106），
+            // 原来读 'message' 得到 null 传给非空 String → TypeError 红屏
+            final String msg =
+                (snapshot.data['msg'] ?? snapshot.data['message'] ?? '加载失败')
+                    .toString();
+            return _buildError(msg);
           }
         } else {
           return _buildLoading();
@@ -134,12 +141,31 @@ class _ReadPageState extends State<ReadPage> {
   }
 
   Widget _buildContent(ReadDataModel cvData) {
+    // B 站新版 cv 页面只返回 detail.modules（老 readInfo 已不存在），
+    // 这时交给共用的图文渲染器；老页面继续走 readInfo 逻辑。
+    final ReadInfo? readInfo = cvData.readInfo;
+    final OpusDataModel opusData = controller.opusData.value;
+    if (readInfo == null) {
+      if (opusData.detail?.modules != null &&
+          opusData.detail!.modules!.isNotEmpty) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+              16, 0, 16, MediaQuery.of(context).padding.bottom + 40),
+          child: OpusModuleView(
+            opusData: opusData,
+            onPreviewImg: (pics, index) =>
+                controller.onPreviewImg(pics, index, context),
+          ),
+        );
+      }
+      return _buildError('专栏内容缺失');
+    }
     final List<String> picList = _extractPicList(cvData);
-    final List<String> imgList = extractDataSrc(cvData.readInfo!.content!);
+    final List<String> imgList = extractDataSrc(readInfo.content ?? '');
     return Padding(
       padding: EdgeInsets.fromLTRB(
           16, 0, 16, MediaQuery.of(context).padding.bottom + 40),
-      child: cvData.readInfo!.opus == null
+      child: readInfo.opus == null
           ? _buildNonOpusContent(cvData, imgList)
           : _buildOpusContent(cvData, picList),
     );
@@ -147,14 +173,12 @@ class _ReadPageState extends State<ReadPage> {
 
   List<String> _extractPicList(ReadDataModel cvData) {
     final List<String> picList = [];
-    if (cvData.readInfo!.opus != null) {
-      final List<ModuleParagraph> paragraphs =
-          cvData.readInfo!.opus!.content!.paragraphs!;
-      for (var paragraph in paragraphs) {
-        if (paragraph.paraType == 2) {
-          for (var pic in paragraph.pic!.pics!) {
-            picList.add(pic.url!);
-          }
+    final List<ModuleParagraph> paragraphs =
+        cvData.readInfo?.opus?.content?.paragraphs ?? <ModuleParagraph>[];
+    for (var paragraph in paragraphs) {
+      if (paragraph.paraType == 2) {
+        for (var pic in paragraph.pic?.pics ?? <Pic>[]) {
+          if (pic.url != null) picList.add(pic.url!);
         }
       }
     }
@@ -174,7 +198,7 @@ class _ReadPageState extends State<ReadPage> {
         ),
         SelectionArea(
           child: HtmlRender(
-            htmlContent: cvData.readInfo!.content!,
+            htmlContent: cvData.readInfo?.content ?? '',
             imgList: imgList,
           ),
         ),
@@ -195,7 +219,8 @@ class _ReadPageState extends State<ReadPage> {
           padding: const EdgeInsets.only(bottom: 20),
           child: _buildAuthorWidget(cvData),
         ),
-        ...cvData.readInfo!.opus!.content!.paragraphs!.map(
+        ...(cvData.readInfo?.opus?.content?.paragraphs ?? <ModuleParagraph>[])
+            .map(
           (ModuleParagraph paragraph) {
             return Column(
               children: [
@@ -228,11 +253,35 @@ class _ReadPageState extends State<ReadPage> {
     );
   }
 
-  Widget _buildError(String message) {
+  Widget _buildError(String? message) {
     return SizedBox(
-      height: 100,
+      height: 300,
       child: Center(
-        child: Text(message),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SvgPicture.asset('assets/images/error.svg', height: 160),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                message ?? '请求异常',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonal(
+              onPressed: () {
+                setState(() {
+                  _futureBuilderFuture = controller.fetchCvData();
+                });
+              },
+              child: const Text('点击重试'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -250,14 +299,14 @@ class _ReadPageState extends State<ReadPage> {
     return Row(
       children: [
         StyledText(Utils.CustomStamp_str(
-          timestamp: cvData.readInfo!.publishTime!,
+          timestamp: cvData.readInfo?.publishTime ?? 0,
           date: 'YY-MM-DD hh:mm',
           toInt: false,
         )),
         const SizedBox(width: 10),
-        StyledText('${Utils.numFormat(cvData.readInfo!.stats!['view'])}浏览'),
+        StyledText('${Utils.numFormat(cvData.readInfo?.stats?['view'])}浏览'),
         const StyledText(' · '),
-        StyledText('${cvData.readInfo!.stats!['like']}点赞'),
+        StyledText('${cvData.readInfo?.stats?['like'] ?? 0}点赞'),
         // const StyledText(' · '),
         // StyledText('${cvData.readInfo!.stats!['reply']}评论'),
       ],
@@ -265,7 +314,10 @@ class _ReadPageState extends State<ReadPage> {
   }
 
   Widget _buildAuthorWidget(ReadDataModel cvData) {
-    final Author author = cvData.readInfo!.author!;
+    // author 在部分老文章 / 接口降级时缺失，原来是裸 ! 断言
+    final Author? author = cvData.readInfo?.author;
+    if (author == null) return const SizedBox(height: 8);
+    final int? nicknameColor = author.vip?.nicknameColor;
     return Row(
       children: [
         NetworkImgLayer(
@@ -281,11 +333,10 @@ class _ReadPageState extends State<ReadPage> {
             Row(
               children: [
                 Text(
-                  author.name!,
+                  author.name ?? '',
                   style: TextStyle(
-                    color: author.vip!.nicknameColor != null
-                        ? Color(author.vip!.nicknameColor!)
-                        : null,
+                    color:
+                        nicknameColor != null ? Color(nicknameColor) : null,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -301,7 +352,7 @@ class _ReadPageState extends State<ReadPage> {
                 StyledText('粉丝: ${Utils.numFormat(author.fans)}'),
                 const SizedBox(width: 10),
                 StyledText(
-                    '文章: ${Utils.numFormat(cvData.readInfo!.totalArtNum)}'),
+                    '文章: ${Utils.numFormat(cvData.readInfo?.totalArtNum ?? 0)}'),
               ],
             ),
           ],

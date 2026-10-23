@@ -81,6 +81,17 @@ class VideoDetailController extends GetxController
   RxString bgCover = ''.obs;
   RxString cover = ''.obs;
   PlPlayerController plPlayerController = PlPlayerController();
+  // 本页是否已释放播放器。view.dispose 与 GetX 路由 onClose 都会在退出页面时执行，
+  // 两处统一走 releasePlayer()，保证一个页面只把全局播放器计数减一次（否则 A→B→返回A 时
+  // 计数会被多减，共享播放器被提前销毁，返回 A 后 setDataSource 永远 loading）。
+  bool _playerReleased = false;
+
+  /// 释放播放器（幂等），view.dispose 与 onClose 都调用这里
+  void releasePlayer() {
+    if (_playerReleased) return;
+    _playerReleased = true;
+    plPlayerController.dispose();
+  }
 
   late VideoItem firstVideo;
   late AudioItem firstAudio;
@@ -376,10 +387,16 @@ class VideoDetailController extends GetxController
             allVideosList.where((e) => e.quality!.code == resVideoQa).toList();
 
         /// 优先顺序 设置中指定解码格式 -> 当前可选的首个解码格式
-        final List<FormatItem> supportFormats = data.supportFormats!;
-        // 根据画质选编码格式
-        final List supportDecodeFormats =
-            supportFormats.firstWhere((e) => e.quality == resVideoQa).codecs!;
+        final List<FormatItem> supportFormats = data.supportFormats ?? <FormatItem>[];
+        // 根据画质选编码格式。接口偶尔不会返回所选画质的 supportFormats 条目，
+        // 原来裸 firstWhere 会抛 StateError，被外层 catch 吞掉后视频直接不加载，
+        // 这里退化为首个可用格式，保证还能播。
+        final FormatItem matchedFormat = supportFormats.firstWhere(
+          (e) => e.quality == resVideoQa,
+          orElse: () =>
+              supportFormats.isNotEmpty ? supportFormats.first : FormatItem(),
+        );
+        final List supportDecodeFormats = matchedFormat.codecs ?? <dynamic>[];
         // 默认从设置中取AVC
         currentDecodeFormats = VideoDecodeFormatsCode.fromString(cacheDecode)!;
         try {
@@ -718,7 +735,7 @@ class VideoDetailController extends GetxController
   @override
   void onClose() {
     super.onClose();
-    plPlayerController.dispose();
+    releasePlayer();
     tabCtr.removeListener(onTabChanged);
     tabCtr.dispose();
   }

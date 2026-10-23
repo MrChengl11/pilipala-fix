@@ -279,7 +279,8 @@ class _ActionPanelState extends State<ActionPanel>
                               child: const Text('转发'),
                             )
                           : TextButton(
-                              onPressed: () {},
+                              // 展开转发面板（与下方「说点什么吧」同一行为）
+                              onPressed: () => togglePanelState(true),
                               child: const Text('立即转发'),
                             )
                     ],

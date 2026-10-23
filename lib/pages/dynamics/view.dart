@@ -36,6 +36,8 @@ class _DynamicsPageState extends State<DynamicsPage>
   late Future _futureBuilderFutureUp;
   Box userInfoCache = GStrorage.userInfo;
   late ScrollController scrollController;
+  VoidCallback? _scrollListener;
+  late Worker _userLoginWorker;
 
   @override
   bool get wantKeepAlive => true;
@@ -46,20 +48,21 @@ class _DynamicsPageState extends State<DynamicsPage>
     _futureBuilderFuture = _dynamicsController.queryFollowDynamic();
     _futureBuilderFutureUp = _dynamicsController.queryFollowUp();
     scrollController = _dynamicsController.scrollController;
-    scrollController.addListener(
-      () async {
-        if (scrollController.position.pixels >=
-            scrollController.position.maxScrollExtent - 200) {
-          EasyThrottle.throttle(
-              'queryFollowDynamic', const Duration(seconds: 1), () {
-            _dynamicsController.queryFollowDynamic(type: 'onLoad');
-          });
-        }
-        handleScrollEvent(scrollController);
-      },
-    );
+    _scrollListener = () {
+      if (scrollController.position.pixels >=
+          scrollController.position.maxScrollExtent - 200) {
+        EasyThrottle.throttle(
+            'queryFollowDynamic', const Duration(seconds: 1), () {
+          _dynamicsController.queryFollowDynamic(type: 'onLoad');
+        });
+      }
+      handleScrollEvent(scrollController);
+    };
+    scrollController.addListener(_scrollListener!);
 
-    _dynamicsController.userLogin.listen((status) {
+    // userLogin 是 RxBool，用 ever() 得到 GetX Worker（listen() 返回的是
+    // StreamSubscription，类型不兼容且 dispose() 方法不存在）
+    _userLoginWorker = ever(_dynamicsController.userLogin, (status) {
       if (mounted) {
         setState(() {
           _futureBuilderFuture = _dynamicsController.queryFollowDynamic();
@@ -71,8 +74,19 @@ class _DynamicsPageState extends State<DynamicsPage>
 
   @override
   void dispose() {
-    scrollController.removeListener(() {});
+    if (_scrollListener != null) {
+      scrollController.removeListener(_scrollListener!);
+      _scrollListener = null;
+    }
+    _userLoginWorker.dispose();
     super.dispose();
+  }
+
+  void _retry() {
+    setState(() {
+      _futureBuilderFuture = _dynamicsController.queryFollowDynamic();
+      _futureBuilderFutureUp = _dynamicsController.queryFollowUp();
+    });
   }
 
   @override
@@ -190,7 +204,19 @@ class _DynamicsPageState extends State<DynamicsPage>
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: () => _dynamicsController.onRefresh(),
+        onRefresh: () async {
+          final Future<dynamic> dynamicFuture =
+              _dynamicsController.queryFollowDynamic();
+          final Future<dynamic> upFuture = _dynamicsController.queryFollowUp();
+          if (mounted) {
+            setState(() {
+              _futureBuilderFuture = dynamicFuture;
+              _futureBuilderFutureUp = upFuture;
+            });
+          }
+          await dynamicFuture;
+          await upFuture;
+        },
         child: CustomScrollView(
           controller: _dynamicsController.scrollController,
           slivers: [
@@ -198,10 +224,13 @@ class _DynamicsPageState extends State<DynamicsPage>
               future: _futureBuilderFutureUp,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.done) {
-                  if (snapshot.data == null) {
-                    return const SliverToBoxAdapter(child: SizedBox());
+                  var data = snapshot.data;
+                  if (data is! Map) {
+                    return HttpError(
+                      errMsg: snapshot.error?.toString() ?? '请求异常',
+                      fn: _retry,
+                    );
                   }
-                  Map data = snapshot.data;
                   if (data['status']) {
                     return Obx(
                       () => UpPanel(
@@ -236,11 +265,14 @@ class _DynamicsPageState extends State<DynamicsPage>
               future: _futureBuilderFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.done) {
-                  if (snapshot.data == null) {
-                    return const SliverToBoxAdapter(child: SizedBox());
+                  var data = snapshot.data;
+                  if (data is! Map) {
+                    return HttpError(
+                      errMsg: snapshot.error?.toString() ?? '请求异常',
+                      fn: _retry,
+                    );
                   }
-                  Map? data = snapshot.data;
-                  if (data != null && data['status']) {
+                  if (data['status']) {
                     List<DynamicItemModel> list =
                         _dynamicsController.dynamicsList;
                     return Obx(

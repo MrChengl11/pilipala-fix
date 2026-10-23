@@ -43,10 +43,22 @@ class WhisperController extends GetxController {
 
   Future querySessionList(String? type) async {
     if (isLoading) return;
+    // 上拉加载时如果本地会话列表为空（首次加载失败后下拉重试等），
+    // sessionList.last 会抛 StateError 让整页私信列表永久空白
+    if (type == 'onLoad' && sessionList.isEmpty) return;
     var res = await MsgHttp.sessionList(
         endTs: type == 'onLoad' ? sessionList.last.sessionTs : null);
-    if (res['data'].sessionList != null && res['data'].sessionList.isNotEmpty) {
-      await queryAccountList(res['data'].sessionList);
+    if (res['status'] != true) {
+      // 接口失败时 MsgHttp.sessionList 返回的 data 是空 List，
+      // 原来这里直接 res['data'].sessionList 会抛
+      // NoSuchMethodError（List 没有 sessionList 成员）→ 断网进私信直接崩
+      isLoading = false;
+      return res;
+    }
+    final SessionDataModel? sessionData = res['data'];
+    if (sessionData?.sessionList != null &&
+        sessionData!.sessionList!.isNotEmpty) {
+      await queryAccountList(sessionData.sessionList!);
       // 将 accountList 转换为 Map 结构
       Map<int, dynamic> accountMap = {};
       for (var j in accountList) {
@@ -54,7 +66,7 @@ class WhisperController extends GetxController {
       }
 
       // 遍历 sessionList，通过 mid 查找并赋值 accountInfo
-      for (var i in res['data'].sessionList) {
+      for (var i in sessionData.sessionList!) {
         var accountInfo = accountMap[i.talkerId];
         if (accountInfo != null) {
           i.accountInfo = accountInfo;
@@ -68,11 +80,12 @@ class WhisperController extends GetxController {
         }
       }
     }
-    if (res['status'] && res['data'].sessionList != null) {
+    final List<SessionList>? list = sessionData?.sessionList;
+    if (list != null) {
       if (type == 'onLoad') {
-        sessionList.addAll(res['data'].sessionList);
+        sessionList.addAll(list);
       } else {
-        sessionList.value = res['data'].sessionList;
+        sessionList.value = list;
       }
     }
     isLoading = false;
@@ -97,9 +110,22 @@ class WhisperController extends GetxController {
   }
 
   void refreshLastMsg(int talkerId, String content) {
-    final SessionList currentItem =
-        sessionList.where((p0) => p0.talkerId == talkerId).first;
-    currentItem.lastMsg!.content['content'] = content;
+    // 会话可能已被删除/服务端已移除（或列表还没加载完），
+    // 原来无 orElse 的 first 会抛 StateError，导致发送成功后整个会话列表不刷新
+    final Iterable<SessionList> matched =
+        sessionList.where((p0) => p0.talkerId == talkerId);
+    if (matched.isEmpty) return;
+    final SessionList currentItem = matched.first;
+    // lastMsg / content 都可能是 null（接口不返回），content 还可能是空串
+    // （Lib/models/msg/session.dart:145-147 解析失败时给 ''），
+    // 直接下标赋值会抛 NoSuchMethodError
+    currentItem.lastMsg ??= LastMsg();
+    final dynamic msgContent = currentItem.lastMsg!.content;
+    if (msgContent is Map) {
+      msgContent['content'] = content;
+    } else {
+      currentItem.lastMsg!.content = <String, dynamic>{'content': content};
+    }
     sessionList.removeWhere((p0) => p0.talkerId == talkerId);
     sessionList.insert(0, currentItem);
     sessionList.refresh();

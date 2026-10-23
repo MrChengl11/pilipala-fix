@@ -650,6 +650,7 @@ class RichTextNodeItem {
     this.text,
     this.type,
     this.rid,
+    this.jumpUrl,
   });
   Emoji? emoji;
   String? origText;
@@ -657,12 +658,17 @@ class RichTextNodeItem {
   String? type;
   String? rid;
 
+  /// 商品(RICH_TEXT_NODE_TYPE_GOODS)等富文本节点的点击跳转地址，
+  /// 之前模型没有该字段，商品节点只能做成空 onTap 假入口。
+  String? jumpUrl;
+
   RichTextNodeItem.fromJson(Map<String, dynamic> json) {
     emoji = json['emoji'] != null ? Emoji.fromJson(json['emoji']) : null;
     origText = asStr(json['orig_text']);
     text = asStr(json['text']);
     type = asStr(json['type']);
     rid = asStr(json['rid']);
+    jumpUrl = asStr(json['jump_url']);
   }
 }
 

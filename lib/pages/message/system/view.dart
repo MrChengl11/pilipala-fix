@@ -31,7 +31,14 @@ class _MessageSystemPageState extends State<MessageSystemPage> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await _messageSystemCtr.queryAndProcessMessages();
+          final Future future =
+              _messageSystemCtr.queryAndProcessMessages();
+          if (mounted) {
+            setState(() {
+              _futureBuilderFuture = future;
+            });
+          }
+          await future;
         },
         child: FutureBuilder(
           future: _futureBuilderFuture,
@@ -52,7 +59,23 @@ class _MessageSystemPageState extends State<MessageSystemPage> {
                   ],
                 );
               }
-              if (snapshot.data['status']) {
+              final data = snapshot.data;
+              if (data is! Map) {
+                return CustomScrollView(
+                  slivers: [
+                    HttpError(
+                      errMsg: snapshot.error?.toString() ?? '请求异常',
+                      fn: () {
+                        setState(() {
+                          _futureBuilderFuture =
+                              _messageSystemCtr.queryAndProcessMessages();
+                        });
+                      },
+                    )
+                  ],
+                );
+              }
+              if (data['status']) {
                 final systemItems = _messageSystemCtr.systemItems;
                 return Obx(
                   () => ListView.separated(
@@ -78,11 +101,11 @@ class _MessageSystemPageState extends State<MessageSystemPage> {
                 return CustomScrollView(
                   slivers: [
                     HttpError(
-                      errMsg: snapshot.data['msg'],
+                      errMsg: data['msg'] ?? '请求异常',
                       fn: () {
                         setState(() {
                           _futureBuilderFuture =
-                              _messageSystemCtr.queryMessageSystem();
+                              _messageSystemCtr.queryAndProcessMessages();
                         });
                       },
                     )

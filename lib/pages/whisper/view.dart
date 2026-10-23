@@ -4,6 +4,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:pilipala/common/constants.dart';
 import 'package:pilipala/common/skeleton/skeleton.dart';
+import 'package:pilipala/common/widgets/http_error.dart';
 import 'package:pilipala/common/widgets/network_img_layer.dart';
 import 'package:pilipala/utils/utils.dart';
 
@@ -48,7 +49,13 @@ class _WhisperPageState extends State<WhisperPage> {
       body: RefreshIndicator(
         onRefresh: () async {
           _whisperController.unread();
-          await _whisperController.onRefresh();
+          final Future future = _whisperController.onRefresh();
+          if (mounted) {
+            setState(() {
+              _futureBuilderFuture = future;
+            });
+          }
+          await future;
         },
         child: SingleChildScrollView(
           controller: _scrollController,
@@ -72,7 +79,8 @@ class _WhisperPageState extends State<WhisperPage> {
                                 onTap: () {
                                   if (['/messageAt']
                                       .contains(element['path'])) {
-                                    SmartDialog.showToast('功能开发中');
+                                    SmartDialog.showToast(
+                                        '@我的消息暂未支持，请到 B 站客户端查看');
                                     return;
                                   }
                                   Get.toNamed(element['path']);
@@ -149,8 +157,14 @@ class _WhisperPageState extends State<WhisperPage> {
                       );
                     } else {
                       // 请求错误
-                      return Center(
-                        child: Text(data?['msg'] ?? '请求异常'),
+                      return HttpErrorBox(
+                        errMsg: data?['msg'] ?? '请求异常',
+                        fn: () {
+                          setState(() {
+                            _futureBuilderFuture =
+                                _whisperController.querySessionList('init');
+                          });
+                        },
                       );
                     }
                   } else {

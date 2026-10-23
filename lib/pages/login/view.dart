@@ -108,17 +108,19 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       actions: [
-                        TextButton(
-                          onPressed: () {},
-                          child: Obx(() {
-                            return Text(
+                        Obx(() {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                            ),
+                            child: Text(
                               '有效期: ${_loginPageCtr.validSeconds.value}s',
                               style: Theme.of(context).textTheme.titleMedium,
-                            );
-                          }),
-                        ),
+                            ),
+                          );
+                        }),
                         TextButton(
-                          onPressed: () {},
+                          onPressed: () => _loginPageCtr.checkLoginStatus(),
                           child: Text(
                             '检查登录状态',
                             style: TextStyle(
@@ -134,7 +136,7 @@ class _LoginPageState extends State<LoginPage> {
                   });
                 },
               ).then((value) {
-                _loginPageCtr.validTimer!.cancel();
+                _loginPageCtr.validTimer?.cancel();
               });
             },
             icon: const Icon(Icons.qr_code, size: 20),
@@ -199,7 +201,19 @@ class _LoginPageState extends State<LoginPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      TextButton(onPressed: () {}, child: const Text('中国大陆')),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 12),
+                        child: Text(
+                          '中国大陆',
+                          style: TextStyle(
+                            fontSize: Theme.of(context)
+                                .textTheme
+                                .titleMedium!
+                                .fontSize,
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                        ),
+                      ),
                       TextButton(
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),

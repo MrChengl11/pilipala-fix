@@ -75,11 +75,9 @@ List<Map> actionMenuConfig = [
     'label': '视频分享',
     'value': ActionType.share,
   },
-  {
-    'icon': const Icon(Icons.thumb_down_alt_outlined),
-    'label': '不喜欢',
-    'value': ActionType.dislike,
-  },
+  // 「不喜欢」(ActionType.dislike) 已下线：web cookie 架构下没有可用接口
+  // （api.bilibili.com 三条路径均 404；app.bilibili.com 需要 appkey+access_key 的 app 签名）。
+  // 枚举值与 extension 的 value/label 下标映射仍然保留，避免历史 hive 数据错位。
   {
     'icon': const Icon(Icons.image_outlined),
     'label': '下载封面',
