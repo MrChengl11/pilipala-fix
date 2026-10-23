@@ -104,7 +104,16 @@ class ReadHttp {
     final String html = res.data?.toString() ?? '';
     if (html.isEmpty) return {'status': false, 'msg': '专栏内容获取失败'};
     final Map<String, dynamic>? jsonData = _extractJson(html);
-    if (jsonData == null) return {'status': false, 'msg': '专栏内容解析失败'};
+    // 未登录 / 被风控时接口返回的是几千字节的验证页而不是文章页，
+    // 直接提示「解析失败」会让用户以为是 app 坏了，这里给出可操作提示。
+    if (jsonData == null) {
+      return {
+        'status': false,
+        'msg': html.length < 20000
+            ? '专栏加载失败，请先登录后重试'
+            : '专栏内容解析失败',
+      };
+    }
     final List<String> errors = [];
     ReadDataModel? readData;
     try {
