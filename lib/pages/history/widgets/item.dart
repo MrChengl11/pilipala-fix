@@ -139,13 +139,21 @@ class HistoryItem extends StatelessWidget {
               builder: (context, boxConstraints) {
                 double width =
                     (boxConstraints.maxWidth - StyleString.cardSpace * 6) / 2;
-                return SizedBox(
-                  height: width / StyleString.aspectRatio,
+                // 高度不再写死为「封面高」，否则字体放大后
+                // 标题 2 行 + 作者 + 日期行的总高会超过封面高，
+                // 每张卡底部 RenderFlex overflow（实测 10~14px）。
+                return Container(
+                  constraints: BoxConstraints(
+                    minHeight: width / StyleString.aspectRatio,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.start,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Stack(
+                      SizedBox(
+                        width: width,
+                        height: width / StyleString.aspectRatio,
+                        child: Stack(
                         children: [
                           AspectRatio(
                             aspectRatio: StyleString.aspectRatio,
@@ -268,7 +276,8 @@ class HistoryItem extends StatelessWidget {
                                   ),
                                 )
                               : const SizedBox()
-                        ],
+                          ],
+                        ),
                       ),
                       VideoContent(videoItem: videoItem, ctr: ctr)
                     ],
@@ -294,6 +303,7 @@ class VideoContent extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 2, 6, 0),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -319,7 +329,7 @@ class VideoContent extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ],
-            const Spacer(),
+            const SizedBox(height: 2),
             if (videoItem.authorName != '')
               Row(
                 children: [

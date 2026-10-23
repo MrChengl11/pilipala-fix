@@ -36,7 +36,9 @@ class StyleString {
     const double statHeight = 20;
     // 标题与元信息之间的固定间隙 SizedBox(height: 2)
     const double gap = 2;
-    return titleHeight + pubdateHeight + ownerHeight + statHeight + gap;
+    // 1dp 亚像素余量：四舍五入后仍可能差 0.5~1px
+    const double safety = 1;
+    return titleHeight + pubdateHeight + ownerHeight + statHeight + gap + safety;
   }
 
   /// 视频/直播卡片中「图片下方文字区域」的估算高度。

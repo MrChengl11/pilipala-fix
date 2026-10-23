@@ -290,33 +290,42 @@ class VideoStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 窄卡片（3 列及以上）时一行放不下「播放量 + 弹幕数 + 相对时间」，
-    // 这里让统计项可以被压缩并把相对时间换成省略号，避免 RenderFlex 横向溢出。
+    // 统计行 = 播放量 + 弹幕数 + 相对时间，三者都不算短。
+    // 原先只在「3 列及以上」才允许压缩，2 列时三个子项都是固定宽度，
+    // 一旦字体放大（设置→外观→字体大小 调到 1.3）这一行就比卡片宽，
+    // 报 "A RenderFlex overflowed by 10 pixels on the right."。
+    // 因此这里始终启用压缩：文字过长时优先省略，绝不允许横向溢出。
     final bool narrow = crossAxisCount > 2;
     return Row(
       children: [
         Flexible(
-          flex: narrow ? 3 : 0,
-          child: StatView(view: videoItem.stat.view, overflow: narrow),
+          flex: 3,
+          child: StatView(view: videoItem.stat.view, overflow: true),
         ),
         SizedBox(width: narrow ? 4 : 8),
         Flexible(
-          flex: narrow ? 2 : 0,
-          child: StatDanMu(danmu: videoItem.stat.danmu, overflow: narrow),
+          flex: 2,
+          child: StatDanMu(danmu: videoItem.stat.danmu, overflow: true),
         ),
-        if (videoItem is RecVideoItemModel) ...<Widget>[
-          crossAxisCount > 1 ? const Spacer() : const SizedBox(width: 8),
-          Flexible(
-            flex: narrow ? 2 : 0,
-            child: RichText(
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              text: TextSpan(
-                  style: TextStyle(
-                    fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                  text: Utils.formatTimestampToRelativeTime(videoItem.pubdate)),
+        if (videoItem is RecVideoItemModel) ...[
+          // 原来的 Spacer + Flexible 组合在空间不足时仍可能挤爆，
+          // 改成 Expanded 占满剩余空间、内容右对齐并允许省略。
+          Expanded(
+            flex: 3,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: RichText(
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                text: TextSpan(
+                    style: TextStyle(
+                      fontSize:
+                          Theme.of(context).textTheme.labelSmall!.fontSize,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                    text: Utils.formatTimestampToRelativeTime(videoItem.pubdate)),
+              ),
             ),
           ),
           const SizedBox(width: 4),

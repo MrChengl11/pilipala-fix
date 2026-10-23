@@ -88,32 +88,30 @@ class VideoCardH extends StatelessWidget {
             StyleString.safeSpace, 5, StyleString.safeSpace, 5),
         child: LayoutBuilder(
           builder: (BuildContext context, BoxConstraints boxConstraints) {
-            final double width = (boxConstraints.maxWidth -
+            final double coverWidth = (boxConstraints.maxWidth -
                     StyleString.cardSpace *
                         6 /
                         MediaQuery.textScalerOf(context).scale(1.0)) /
                 2;
-            // 原来高度只按封面算（width / aspectRatio），但右侧文字区
-            // 是 4 行（标题2行 + 发布日期 + 作者 + 统计/更多按钮），
-            // 在小屏 360dp 上文字区需要 ~95dp 而封面只有 90dp，
-            // 于是每张卡片都 RenderFlex overflow 8~10px。
-            // 修复：VideoContent 内部已把行高收紧到刚好贴合封面，
-            // 这里再取「封面高度」与「文字区最小高度」的较大值兜底。
-            final double coverHeight = width / StyleString.aspectRatio;
-            final double contentHeight = StyleString.horizontalContentExtent(
-              MediaQuery.textScalerOf(context),
-              showPubdate: showPubdate,
-              showOwner: showOwner,
-            );
+            final double coverHeight = coverWidth / StyleString.aspectRatio;
+            // 高度不再写死。
+            // 历史问题：以前用 height = max(封面高, 手算的文字区高)，
+            // 手算「字号 × 行高系数」永远比真实渲染矮一点（字体放大到 1.3 后
+            // 标题两行实测 44~48dp、发布日期 19dp、作者 19dp、统计行 22dp，
+            // 合计 104~108dp，而公式只给 102.6dp），于是每张卡片底部固定
+            // 溢出 2~8px；换成 TextPainter 精确测量后仍残留 2~6px
+            // （主题 leading / 字体 ascent / 中英混排带来额外行高）。
+            // 因此改成高度由内容自然决定：Row 的高度 = max(封面, 文字区)，
+            // 文字再高也只是把卡片撑高，永远不会出现 RenderFlex overflow。
             return Container(
               constraints: const BoxConstraints(minHeight: 88),
-              height: coverHeight > contentHeight ? coverHeight : contentHeight,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  AspectRatio(
-                    aspectRatio: StyleString.aspectRatio,
+                  SizedBox(
+                    width: coverWidth,
+                    height: coverHeight,
                     child: LayoutBuilder(
                       builder: (BuildContext context,
                           BoxConstraints boxConstraints) {
@@ -222,13 +220,18 @@ class VideoContent extends StatelessWidget {
               // 整个列表（排行榜/搜索/稍后再看）布局失败变白屏。
               // 列高已由 StyleString.horizontalContentExtent 兜底，
               // maxLines + ellipsis 足以保证不溢出。
+              // 必须显式给出 lineHeight：原写法只写 height 但没指定字号时，
+              // 实际行高会跟随主题 bodyMedium（M3 下 height=1.43，20/14），
+              // 而 StyleString.horizontalContentExtent 是按 1.2 估算的，
+              // 字体放大到 1.3 后标题两行就多出 ~8.3dp → BOTTOM OVERFLOWED
+              // BY 8.4 PIXELS。这里和常量表对齐，行高固定为 1.2。
               Text(
                 videoItem.title as String,
                 textAlign: TextAlign.start,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  height: 1.2,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                      fontWeight: FontWeight.w500,
+                      height: 1.2,
+                    ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -456,3 +459,4 @@ class MorePanel extends StatelessWidget {
     );
   }
 }
+
