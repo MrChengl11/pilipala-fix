@@ -843,7 +843,12 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ),
         //
         Obx(() {
-          // 错误态优先：出错时即使缓冲标记仍为 true，也要显示错误提示而不是一直转圈
+          // 错误态优先：出错时即使缓冲标记仍为 true，也要显示错误提示而不是一直转圈。
+          // 但只要有实际播放进度，就说明流是活的（media_kit 会把 mpv 里可恢复的
+          // ffmpeg/tcp/stream 告警也当 error 抛出来），此时绝不能显示播放失败。
+          // 走到 error 只有两种可能：setDataSource 真的抛异常，或者
+          // stream.error 过了宽限期仍未恢复（见 _handlePlaybackError）。
+          // 只要之后有进度推进，controller 会把状态清回 loaded，这个横幅会自动消失。
           if (_.dataStatus.error) {
             return const Center(
               child: Text(

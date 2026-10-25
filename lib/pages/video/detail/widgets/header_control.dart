@@ -792,36 +792,52 @@ class _HeaderControlState extends State<HeaderControl> {
                   child: ListView(
                     children: [
                       for (var i in list) ...[
-                        ListTile(
-                          onTap: () {
-                            if (i.toString().startsWith(
-                                currentDecodeFormats.code)) {
-                              return;
-                            }
-                            widget.videoDetailCtr!.currentDecodeFormats =
+                        Builder(
+                          builder: (context) {
+                            // codecs 串（如 'hvc1.1.6.L120.90'）现解析成真正的枚举，
+                            // 解析不出来就是 null —— 以前解析失败会默认成 DVH1，
+                            // 于是 HEVC 流被显示成「DVH1」，点下去必然找不到
+                            // dvh1 流而被打回 AVC（Bug 2 的直接成因）。
+                            final VideoDecodeFormats? target =
                                 VideoDecodeFormatsCode.fromString(
-                                    i.toString())!;
-                            widget.videoDetailCtr!.updatePlayer();
-                            Get.back();
+                                    i.toString());
+                            final bool selected = target != null
+                                ? target == currentDecodeFormats
+                                : i.toString() ==
+                                    currentDecodeFormats.code;
+                            return ListTile(
+                              onTap: () {
+                                if (target == null) {
+                                  // 本地枚举不认识的编码：明确提示而不是假装切换
+                                  SmartDialog.showToast('暂不支持该解码格式：$i');
+                                  return;
+                                }
+                                if (selected) return;
+                                widget.videoDetailCtr!.currentDecodeFormats =
+                                    target;
+                                widget.videoDetailCtr!.updatePlayer(
+                                    fromDecodeSwitch: true);
+                                Get.back();
+                              },
+                              dense: true,
+                              contentPadding:
+                                  const EdgeInsets.only(left: 20, right: 20),
+                              title: Text(
+                                  VideoDecodeFormatsCode.descFromString(
+                                      i.toString())),
+                              subtitle: Text(
+                                i.toString(),
+                                style: subTitleStyle,
+                              ),
+                              trailing: selected
+                                  ? Icon(
+                                      Icons.done,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    )
+                                  : const SizedBox(),
+                            );
                           },
-                          dense: true,
-                          contentPadding:
-                              const EdgeInsets.only(left: 20, right: 20),
-                          // 接口可能返回本地枚举没有的 codecs 串（如新的 av01.xxx），
-                          // 原来 fromString(i)! 会抛 null check 让整个面板渲染失败
-                          title: Text(
-                              VideoDecodeFormatsCode.fromString(i)!.description ??
-                                  ''),
-                          subtitle: Text(
-                            i.toString(),
-                            style: subTitleStyle,
-                          ),
-                          trailing: i.toString().startsWith(currentDecodeFormats.code)
-                              ? Icon(
-                                  Icons.done,
-                                  color: Theme.of(context).colorScheme.primary,
-                                )
-                              : const SizedBox(),
                         ),
                       ]
                     ],

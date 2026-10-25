@@ -95,6 +95,25 @@ class PlPlayerController {
   bool _autoPlay = false;
   bool _listenersInitialized = false;
 
+  // ---- 播放失败提示（「播放失败，请返回重试」）相关的状态 ----
+  // media_kit 会把 mpv 里 level=error 的日志（包括 ffmpeg/tcp/stream 这类
+  // 「先报错、随后自动重连成功」的可恢复告警）全部通过 stream.error 抛到 Dart 层。
+  // 以前一收到就置 DataStatus.error，且没有任何地方会把它复位，于是直播/切 AV1
+  // 时明明画面正常也在一直显示「播放失败，请返回重试」。
+  // 现在改成「宽限期 + 进展判定」：错误先挂起，宽限期内只要出现任一播放进展
+  // （playing / 进度推进 / 解出画面尺寸）就撤销；完全没有进展才真正判为失败。
+  bool _playbackStarted = false;
+  // 是否真的解出了画面（进度>0 或收到有效画面尺寸）。这才是「视频输出正常」
+  // 的硬证据；mpv 的 playing=true 在地址/鉴权彻底失败时也可能出现，不能单用。
+  bool _frameRendered = false;
+  bool _hasPendingError = false;
+  Duration _errorAtPosition = Duration.zero;
+  Timer? _errorGraceTimer;
+  // 本实例是否已被 dispose 释放。setDataSource 里用它挡住「页面已退出，
+  // 但 await 网络请求后续才回到 playerInit」的竞态：以前这种情况会置
+  // DataStatus.error（下一次进页面就继承「播放失败」横幅）。
+  bool _released = false;
+
   // 记录历史记录
   String _bvid = '';
   int _cid = 0;
@@ -309,6 +328,8 @@ class PlPlayerController {
     if (videoType != 'none') {
       _instance!._playerCount.value += 1;
       _videoType.value = videoType;
+      // 有页面重新取到了这个共享实例 => 它重新可用
+      _instance!._released = false;
     }
     return _instance!;
   }
@@ -340,11 +361,20 @@ class PlPlayerController {
     //  是否开启字幕
     bool enableSubTitle = false,
   }) async {
+    // 页面已经释放过播放器，但异步的取流/切源请求现在才回来：直接忽略。
+    // 以前这种情况会继续走下面的流程并在 _playerCount==0 分支置 error，
+    // 于是下一次进入页面就继承「播放失败，请返回重试」横幅（Bug 1 成因之一）。
+    // 重建播放器同样不可取：会留下一个没有 UI 的实例在后台出声。
+    // 注意：重新取到实例时 factory 会把 _released 复位，所以正常流程不受影响。
+    if (_released) return;
     try {
       _autoPlay = autoplay;
       _looping = looping;
       // 初始化视频倍速
       // _playbackSpeed.value = speed;
+      // 每次挂新数据源都复位错误/进度标记：否则上一页残留的 error 态会被
+      // 新页面继承，一进直播间就显示「播放失败，请返回重试」。
+      _resetPlaybackState();
       // 初始化数据加载状态
       dataStatus.status.value = DataStatus.loading;
       // 初始化全屏方向
@@ -362,10 +392,12 @@ class PlPlayerController {
       }
 
       if (_playerCount.value == 0) {
-        // 计数为 0 说明共享播放器实例已被释放（当前页面仍持有旧实例）。
-        // 此时继续初始化没有任何意义，直接置错误态，让 UI 显示可见提示而不是永久 loading。
-        dataStatus.status.value = DataStatus.error;
-        return;
+        // 引用计数被别的页面减到 0，但当前页面仍持有这个共享实例
+        //（factory 已把 _released 复位）。补回计数即可，
+        // _createVideoController 会重建底层 Player。
+        // 旧代码这里直接置 error，于是新页面一挂载就显示「播放失败」。
+        _playerCount.value = 1;
+        _instance ??= this;
       }
       // 配置Player 音轨、字幕等等
       _videoPlayerController = await _createVideoController(
@@ -403,6 +435,8 @@ class PlPlayerController {
   ) async {
     // 每次配置时先移除监听
     removeListeners();
+    // 换源 = 新的一次播放尝试，清掉上一源的错误/进度标记
+    _resetPlaybackState();
     isBuffering.value = false;
     buffered.value = Duration.zero;
     _heartDuration = 0;
@@ -535,6 +569,88 @@ class PlPlayerController {
   final List<Function(Duration position)> _positionListeners = [];
   final List<Function(PlayerStatus status)> _statusListeners = [];
 
+  /// 复位「播放失败」相关的临时状态（每次换数据源 / 释放播放器时调用）
+  void _resetPlaybackState() {
+    _playbackStarted = false;
+    _frameRendered = false;
+    _hasPendingError = false;
+    _errorAtPosition = Duration.zero;
+    _errorGraceTimer?.cancel();
+    _errorGraceTimer = null;
+  }
+
+  /// 撤销待判定的错误：说明之前的 stream.error 是可恢复告警
+  void _clearPendingError() {
+    if (!_hasPendingError && dataStatus.status.value != DataStatus.error) return;
+    _hasPendingError = false;
+    _errorGraceTimer?.cancel();
+    _errorGraceTimer = null;
+    // 曾经被判失败/或还挂在 loading 上 => 回到 loaded（不显示任何遮罩）
+    if (dataStatus.status.value == DataStatus.error ||
+        dataStatus.status.value == DataStatus.loading) {
+      dataStatus.status.value = DataStatus.loaded;
+    }
+  }
+
+  /// 记录「播放已经启动」。
+  /// 注意：这里【不】撤销待判定的错误 —— mpv 对彻底失败的地址也可能先报
+  /// playing=true（没有数据进来），如果凭 playing 就撤销错误，真实的失败会变成
+  /// 永远转圈。只有真的出画面（_markFrameRendered）才算恢复。
+  /// _playbackStarted 仅用于区分「首帧前/后」以决定宽限期长度。
+  void _markPlaybackAlive() {
+    _playbackStarted = true;
+  }
+
+  /// 记录「确实解出画面」：视频输出是通的，之前的报错肯定是可恢复告警
+  void _markFrameRendered() {
+    _playbackStarted = true;
+    _frameRendered = true;
+    _clearPendingError();
+  }
+
+  /// 收到 stream.error 后的宽限期判定
+  ///
+  /// 错误不立刻判死：media_kit 把 mpv 里所有 level=error 的日志都从这里抛出来，
+  /// 其中大量是「先报错、随后自动恢复」的告警（ffmpeg/tcp 重连、vd 参数探测、
+  /// 直播流首次探测等）。所以先把错误挂起，宽限期内一旦收到 playing / 进度推进 /
+  /// 解出画面尺寸（见 _markPlaybackAlive）就立刻撤销，UI 回到正常播放。
+  /// 只有整个宽限期内一点进展都没有（编码真的不支持、地址或鉴权错误、断流），
+  /// 才置 DataStatus.error 显示「播放失败，请返回重试」。
+  void _handlePlaybackError(String event) {
+    // 是否已经出过画面：决定宽限期长度与是否先显示缓冲遮罩
+    final bool firstFrameRendered = _playbackStarted;
+    // 还没出过画面：先显示缓冲遮罩，给自愈/重连留时间，而不是直接判死
+    if (!firstFrameRendered && dataStatus.status.value != DataStatus.error) {
+      dataStatus.status.value = DataStatus.loading;
+    }
+    // 已经在宽限期内：不重置计时（否则 mpv 每秒重试一次报错就会把判定无限推后，
+    // 真实失败变成永远转圈）。截止时间只从「第一条未恢复的错误」开始算。
+    if (_hasPendingError && _errorGraceTimer != null) return;
+    _hasPendingError = true;
+    _errorAtPosition = _position.value;
+    _errorGraceTimer?.cancel();
+    // 首帧之前给更长的宽限期：直播流/首次探测本来就慢，过早弹「播放失败」
+    // 正是本次要修的 bug；首帧之后（播放中途断流）没进展就可以尽快提示。
+    _errorGraceTimer = Timer(
+      Duration(milliseconds: firstFrameRendered ? 3000 : 5000),
+      () {
+        _errorGraceTimer = null;
+        if (!_hasPendingError) return;
+        // 宽限期内只要出现「进度推进」或「解出画面」，_markFrameRendered() 已经把
+        // pending 错误撤销掉了；这里再判一次是为了覆盖「信号在宽限期边界到达」。
+        final bool advanced = _position.value > _errorAtPosition;
+        if (advanced || _frameRendered) {
+          _clearPendingError();
+          return;
+        }
+        _hasPendingError = false;
+        debugPrint('plPlayer unrecovered stream error: $event');
+        isBuffering.value = false;
+        dataStatus.status.value = DataStatus.error;
+      },
+    );
+  }
+
   /// 播放事件监听
   void startListeners() {
     if (_listenersInitialized) {
@@ -546,6 +662,8 @@ class PlPlayerController {
         videoPlayerController!.stream.playing.listen((event) {
           if (event) {
             playerStatus.status.value = PlayerStatus.playing;
+            // 真的开始播放了 -> 之前收到的 stream.error 属于可恢复告警，撤销错误态
+            _markPlaybackAlive();
           } else {
             playerStatus.status.value = PlayerStatus.paused;
           }
@@ -576,6 +694,11 @@ class PlPlayerController {
         videoPlayerController!.stream.position.listen((event) {
           _position.value = event;
           updatePositionSecond();
+          // 只要有播放进度推进，就说明解码/网络其实都通，
+          // 先前那条 stream.error 是可恢复告警（mpv 的 ffmpeg/tcp/stream 日志）
+          if (event > Duration.zero) {
+            _markFrameRendered();
+          }
           if (!isSliderMoving.value) {
             _sliderPosition.value = event;
             updateSliderPositionSecond();
@@ -588,6 +711,13 @@ class PlPlayerController {
             element(event);
           }
           makeHeartBeat(event.inSeconds);
+        }),
+        // 解码出画面尺寸 = 已经渲染出第一帧，这是最硬的「播放真的成功了」信号，
+        // 直播流（seekable=false）在 mpv 里不一定有可靠进度，靠它兜底。
+        videoPlayerController!.stream.width.listen((event) {
+          if ((event ?? 0) > 0) {
+            _markFrameRendered();
+          }
         }),
         videoPlayerController!.stream.duration.listen((event) {
           if (event > Duration.zero) {
@@ -603,12 +733,20 @@ class PlPlayerController {
           videoPlayerServiceHandler.onStatusChange(
               playerStatus.status.value, event);
         }),
-        // 播放器内部错误（解码失败/网络中断等）：置错误态并清除缓冲标记，
-        // 否则 UI 会一直停在 loading 遮罩里转圈。
+        // 播放器内部错误（解码失败/网络中断等）。
+        // 注意：media_kit 把 mpv 中所有 level=error 的日志都从这里抛出来，
+        // 其中大量是「先报错、稍后自动恢复」的告警（ffmpeg/tcp 重连、vd 参数、
+        // 直播流的 stream 探测等）。所以这里不能立刻判定失败，而是进入
+        // 「宽限期」观察：宽限期内没有播放进度、没有 playing、也没有解码出画面，
+        // 才真正置 DataStatus.error 显示「播放失败，请返回重试」。
         videoPlayerController!.stream.error.listen((String event) {
           debugPrint('plPlayer stream error: $event');
-          isBuffering.value = false;
-          dataStatus.status.value = DataStatus.error;
+          // 已经开始播放时不要粗暴地关掉缓冲/报错：交给宽限期判定，
+          // 既能忽略「先报错后自愈」的告警，又能接住播放中途的真实断流。
+          if (!_playbackStarted) {
+            isBuffering.value = false;
+          }
+          _handlePlaybackError(event);
         }),
         // videoPlayerController!.stream.volume.listen((event) {
         //   if (!mute.value && _volumeBeforeMute != event) {
@@ -1085,7 +1223,16 @@ class PlPlayerController {
       return;
     }
     _playerCount.value = 0;
+    // 标记本实例已释放：之后再有人（异步回调）调用 setDataSource 会被忽略，
+    // 不会再往共享的 dataStatus 里写入 error。
+    _released = true;
     try {
+      // 释放时把共享单例的可见状态复位：否则下一个页面（直播间/详情页）
+      // 一挂载就会读到上一页残留的 error/loading，显示「播放失败，请返回重试」。
+      _resetPlaybackState();
+      dataStatus.status.value = DataStatus.none;
+      playerStatus.status.value = PlayerStatus.paused;
+      isBuffering.value = false;
       _timer?.cancel();
       _timerForVolume?.cancel();
       _timerForGettingVolume?.cancel();

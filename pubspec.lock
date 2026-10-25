@@ -996,11 +996,9 @@ packages:
   ns_danmaku:
     dependency: "direct main"
     description:
-      path: "."
-      ref: master
-      resolved-ref: d1cb3f0190ca67ec4d7fd372dac96f4f17a81a1a
-      url: "https://github.com/guozhigq/flutter_ns_danmaku.git"
-    source: git
+      path: "packages/ns_danmaku"
+      relative: true
+    source: path
     version: "0.0.5"
   octo_image:
     dependency: transitive

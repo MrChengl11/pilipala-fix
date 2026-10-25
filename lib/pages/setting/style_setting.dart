@@ -147,13 +147,15 @@ class _StyleSettingState extends State<StyleSetting> {
           ListTile(
             dense: false,
             onTap: () {
+              // 临时值必须声明在 builder 之外：StatefulBuilder 每次 rebuild 都会
+              // 重新执行 builder，写在里面的局部变量会被重置回 picQuality，
+              // 导致滑块拖一下就弹回原位、根本调不动。
+              int tempQuality = picQuality;
               showDialog(
                 context: context,
                 builder: (context) {
                   return StatefulBuilder(
                     builder: (context, StateSetter setState) {
-                      // 对话框里用临时值：点「取消」不再把未保存的值写回页面字段
-                      int tempQuality = picQuality;
                       return AlertDialog(
                         title: const Text('图片质量'),
                         contentPadding: const EdgeInsets.only(

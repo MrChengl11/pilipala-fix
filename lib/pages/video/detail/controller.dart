@@ -217,7 +217,10 @@ class VideoDetailController extends GetxController
 
   /// 更新画质、音质
   /// TODO 继续进度播放
-  Future updatePlayer() async {
+  /// [fromDecodeSwitch] 为 true 表示这次重建是「用户切换解码格式」触发的：
+  /// 只有这种场景才允许为了让所选编码有片源而切换画质（例如 DVH1 只存在于
+  /// qn=126）。切换画质/音质时不带这个参数，否则用户会永远被锁在 126 画质上。
+  Future updatePlayer({bool fromDecodeSwitch = false}) async {
     defaultST = plPlayerController.position.value;
     plPlayerController.removeListeners();
     plPlayerController.isBuffering.value = false;
@@ -225,10 +228,9 @@ class VideoDetailController extends GetxController
 
     if (archiveSourceType.value == 'dash') {
       /// 根据currentVideoQa和currentDecodeFormats 重新设置videoUrl
-      final List<VideoItem> videoList =
-          (data.dash?.video ?? const <VideoItem>[])
-              .where((i) => i.id == currentVideoQa.code)
-              .toList();
+      final List<VideoItem> allVideos = data.dash?.video ?? const <VideoItem>[];
+      List<VideoItem> videoList =
+          allVideos.where((i) => i.id == currentVideoQa.code).toList();
       if (videoList.isEmpty) {
         // 当前清晰度不在本次返回的 dash 列表中（会员/接口未返回该清晰度）：
         // 恢复监听后提示并返回，避免下方 firstWhere 抛 StateError 让播放器卡在旧状态
@@ -239,35 +241,109 @@ class VideoDetailController extends GetxController
       // currentDecodeFormats/codecs 都可能为 null（会员画质、部分接口不返回编码格式），
       // 直接 ?.code 传给 startsWith 会在裸类型下抛 TypeError
       final String decodeCode = currentDecodeFormats?.code ?? '';
-      try {
-        firstVideo = videoList
-            .firstWhere((i) => (i.codecs ?? '').startsWith(decodeCode));
-      } catch (_) {
-        if (currentVideoQa == VideoQuality.dolbyVision) {
-          firstVideo = videoList.first;
-          currentDecodeFormats =
-              VideoDecodeFormatsCode.fromString(videoList.first.codecs ?? '')!;
-        } else {
-          // 当前格式不可用
-          currentDecodeFormats = VideoDecodeFormatsCode.fromString(setting.get(
-              SettingBoxKey.defaultDecode,
-              defaultValue: VideoDecodeFormats.values.last.code))!;
-          final String fallbackCode = currentDecodeFormats?.code ?? '';
-          firstVideo = videoList.firstWhere(
-              (i) => (i.codecs ?? '').startsWith(fallbackCode),
-              orElse: () => videoList.first);
+
+      /// 找出所选解码格式对应的视频流
+      VideoItem? selected;
+      for (final VideoItem item in videoList) {
+        if (currentDecodeFormats != null &&
+            VideoDecodeFormatsCode.matches(
+                item.codecs, currentDecodeFormats!)) {
+          selected = item;
+          break;
         }
       }
-      videoUrl = firstVideo.baseUrl ?? '';
+      // 当前画质下没有该编码：杜比视界（dvh1）只存在于 qn=126 的流里，
+      // 所以到完整 dash 列表里再找一次。找到就连同杜比音轨一起切过去，
+      // 并明确 toast 告知画质变了 —— 旧代码这里会抛 StateError 然后把
+      // currentDecodeFormats 静默改回设置里的默认 AVC，用户看到的就是
+      // 「选了 DVH1 直接被打回 AVC」（Bug 2）。
+      if (selected == null && fromDecodeSwitch && decodeCode.isNotEmpty) {
+        for (final VideoItem item in allVideos) {
+          if (VideoDecodeFormatsCode.matches(
+              item.codecs, currentDecodeFormats!)) {
+            selected = item;
+            break;
+          }
+        }
+        if (selected != null) {
+          final VideoQuality? targetQa =
+              VideoQualityCode.fromCode(selected.id ?? -1);
+          if (targetQa != null && targetQa != currentVideoQa) {
+            currentVideoQa = targetQa;
+            cacheVideoQa = VideoQualityCode.toCode(targetQa);
+            videoList =
+                allVideos.where((i) => i.id == targetQa.code).toList();
+            SmartDialog.showToast(
+                '已切换到${targetQa.description}画质以启用${currentDecodeFormats!.description}解码');
+          }
+        }
+      }
+      final String unsupported =
+          currentDecodeFormats?.description ?? decodeCode;
+      if (selected == null && fromDecodeSwitch) {
+        // 用户主动选了某个编码，但片源里确实没有（片源没有 / 账号无权限）：
+        // 明确 toast 告知，并把面板上的解码格式同步成「实际正在播的编码」，
+        // 避免出现「面板显示 DVH1、实际在播 AVC」这种不自洽的状态，
+        // 也不像旧代码那样静默把用户的选择改回默认 AVC。
+        String playingCodecs = '';
+        try {
+          // firstVideo 就是「当前正在播的那条流」，此刻仍是上一次的旧值
+          playingCodecs = firstVideo.codecs ?? '';
+        } catch (_) {
+          // firstVideo 还没初始化过（极端情况）：退化为当前画质的首条流
+        }
+        currentDecodeFormats =
+            VideoDecodeFormatsCode.fromString(playingCodecs) ??
+                VideoDecodeFormatsCode.fromString(
+                    videoList.first.codecs ?? '') ??
+                currentDecodeFormats;
+        plPlayerController.startListeners();
+        SmartDialog.showToast(
+            '当前视频没有 $unsupported 编码的片源，保持${currentDecodeFormats?.description ?? ''}解码');
+        return;
+      }
+      if (selected == null) {
+        // 切画质/音质时走到这里：目标画质下没有当前解码格式的流。
+        // 此时用户的主要意图是「换画质」，编码应该让位 —— 取该画质下的首条流，
+        // 并把解码格式同步成它。否则（例如选了 DVH1 之后）再切画质会被直接拒绝，
+        // 看起来就是「画质问不动」。
+        selected = videoList.first;
+        currentDecodeFormats =
+            VideoDecodeFormatsCode.fromString(selected.codecs ?? '') ??
+                currentDecodeFormats;
+        SmartDialog.showToast(
+            '该画质没有 $unsupported 编码的片源，已切换为${currentDecodeFormats?.description ?? ''}解码');
+      }
+      firstVideo = selected;
+      videoUrl = enableCDN
+          ? VideoUtils.getCdnUrl(firstVideo)
+          : (firstVideo.backupUrl ?? firstVideo.baseUrl ?? '');
 
       /// 根据currentAudioQa 重新设置audioUrl
       final List<AudioItem> audioList = data.dash?.audio ?? const <AudioItem>[];
-      if (currentAudioQa != null && audioList.isNotEmpty) {
-        final AudioItem firstAudio = audioList.firstWhere(
-          (AudioItem i) => i.id == currentAudioQa!.code,
-          orElse: () => audioList.first,
-        );
-        audioUrl = firstAudio.baseUrl ?? '';
+      if (audioList.isNotEmpty) {
+        AudioItem? selectedAudio;
+        // 杜比视界一般配套杜比全景声音轨，优先选它
+        if (currentDecodeFormats == VideoDecodeFormats.DVH1) {
+          for (final AudioItem item in audioList) {
+            if (item.id == AudioQuality.dolby.code) {
+              selectedAudio = item;
+              break;
+            }
+          }
+        }
+        selectedAudio ??= currentAudioQa != null
+            ? audioList.firstWhere(
+                (AudioItem i) => i.id == currentAudioQa!.code,
+                orElse: () => audioList.first,
+              )
+            : audioList.first;
+        audioUrl = enableCDN
+            ? VideoUtils.getCdnUrl(selectedAudio)
+            : (selectedAudio.backupUrl ?? selectedAudio.baseUrl ?? '');
+        if (selectedAudio.id != null) {
+          currentAudioQa = AudioQualityCode.fromCode(selectedAudio.id!);
+        }
       }
     }
 
@@ -397,29 +473,38 @@ class VideoDetailController extends GetxController
               supportFormats.isNotEmpty ? supportFormats.first : FormatItem(),
         );
         final List supportDecodeFormats = matchedFormat.codecs ?? <dynamic>[];
-        // 默认从设置中取AVC
-        currentDecodeFormats = VideoDecodeFormatsCode.fromString(cacheDecode)!;
-        try {
-          // 当前视频没有对应格式返回第一个
-          bool flag = false;
-          for (var i in supportDecodeFormats) {
-            if (i.startsWith(currentDecodeFormats?.code)) {
-              flag = true;
+        // 默认从设置中取解码格式（fromString 现在解析不出来会返回 null，
+        // 需要显式兜底，不能再依赖它「默认 DVH1」）
+        currentDecodeFormats = VideoDecodeFormatsCode.fromString(cacheDecode) ??
+            VideoDecodeFormatsCode.fromCode(
+                VideoDecodeFormats.values.last.code);
+        // 当前视频没有对应格式就退化为接口返回的第一个可用格式
+        final bool decodeSupported = supportDecodeFormats.any((i) =>
+            VideoDecodeFormatsCode.matches(i.toString(), currentDecodeFormats!));
+        if (!decodeSupported) {
+          for (final dynamic i in supportDecodeFormats) {
+            final VideoDecodeFormats? matched =
+                VideoDecodeFormatsCode.fromString(i.toString());
+            if (matched != null) {
+              currentDecodeFormats = matched;
+              break;
             }
           }
-          currentDecodeFormats = flag
-              ? currentDecodeFormats
-              : VideoDecodeFormatsCode.fromString(supportDecodeFormats.first)!;
-        } catch (err) {
-          SmartDialog.showToast('DecodeFormats error: $err');
         }
 
         /// 取出符合当前解码格式的videoItem
-        try {
-          firstVideo = videosList.firstWhere(
-              (e) => e.codecs!.startsWith(currentDecodeFormats?.code));
-        } catch (_) {
-          firstVideo = videosList.first;
+        firstVideo = videosList.firstWhere(
+          (e) => VideoDecodeFormatsCode.matches(
+              e.codecs, currentDecodeFormats!),
+          orElse: () => videosList.first,
+        );
+        // 走到 orElse 说明该画质没有所选编码：把 UI 上的解码格式同步成真实
+        // 在播的流，避免面板显示 AVC 而实际是 HEVC（或反过来）
+        if (!VideoDecodeFormatsCode.matches(
+            firstVideo.codecs, currentDecodeFormats!)) {
+          currentDecodeFormats = VideoDecodeFormatsCode.fromString(
+                  firstVideo.codecs ?? '') ??
+              currentDecodeFormats;
         }
         videoUrl = enableCDN
             ? VideoUtils.getCdnUrl(firstVideo)

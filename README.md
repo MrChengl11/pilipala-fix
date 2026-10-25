@@ -78,6 +78,20 @@
 | 19 | 视频操作栏「不喜欢」是空回调的假入口，现已移除 |
 | 20 | 一批 `firstWhere` 缺 `orElse`、用 `!` 强解空值导致的潜在崩溃，已补兜底 |
 
+### P0 · 第二轮修复（v1.0.27-fix2）
+
+| # | 问题 | 根因 |
+| --- | --- | --- |
+| 21 | 进入直播间/切解码格式后显示「播放失败，请返回重试」，实际播放正常 | `lib/plugin/pl_player/controller.dart` 把 `stream.error` 直接当致命错误：media_kit 会把 mpv 中所有 `level=error` 日志（含 ffmpeg/tcp 重连、直播流首次探测等可恢复告警）都从这里抛出，一旦置 `DataStatus.error` 就再没有任何地方复位 |
+| 22 | 切换解码格式 AV1 报播放失败；选 DVH1 直接被打回 AVC | `lib/models/video/play/quality.dart` 的 `VideoDecodeFormatsCode.fromString` 解析失败时**默认返回 `values.first`（DVH1）**，导致 `hvc1.*` 等未知 codecs 全被当成 DVH1，选它就必然失败；`updatePlayer()` 又用 `startsWith(code)` 匹配，与 `supportFormats` 的写法不一致时对不上 |
+| 23 | 部分弹幕滚动到一半消失 | 内置弹幕引擎 `Duration(seconds: widget.duration.floor())`：duration < 1s 时得 `Duration.zero`，`AnimationController.forward()` 同步完成 → `onComplete` 立刻移除；另有 id 用 `key.toString()` 在 release AOT 下 20 位截断碰撞覆盖、以及迭代中修改 Map 的 `ConcurrentModificationError` |
+| 24 | 外观设置「图片质量」拖滑块无效 | `lib/pages/setting/style_setting.dart` 把临时值 `int tempQuality = picQuality` 声**在 `StatefulBuilder` 的 builder 内**，每次 rebuild 都被重置，滑块一拖就弹回 |
+| 25 | 登录成功后仍滚动弹出「登录遇到问题」对话框，需重启才正常 | `lib/utils/login.dart` 直接 `Get.find<MediaController>()` / `DynamicsController` / `MineController`：这些控制器只在对应底部导航项开启时才 `Get.put`，媒体库 tab 关闭时 `find` 抛异常并被外层 `catch` 弹成「登录遇到问题」（登录其实已成功） |
+
+修复方式分别见 [FIXES.md](FIXES.md) 第 21–25 节：播放器改为「宽限期 + 进展判定」、解码格式改为前缀归一表 + 真实选流、弹幕引擎改为本地 vendored 并修 duration/id/迭代、图片质量把临时值提到 builder 外、登录状态同步改为 `_tryFind<T>()` 容错且失败只记日志。
+
+> 补充依赖变更：`ns_danmaku` 由 `git` 依赖改为 `path: packages/ns_danmaku`（内置已打补丁的引擎副本），因此本仓库构建**不需要**再联网拉取该 git 依赖。
+
 ## 🔧 技术说明
 
 ### 新增的通用工具
@@ -88,7 +102,7 @@
 
 ### 改动统计
 
-相对上游 1.0.27.0402：**158 个文件，+5014 / -2052 行**。
+相对上游 1.0.27.0402：**163 个文件，+5339 / -2546 行**（截至 v1.0.27-fix2）。
 
 ## 🏗️ 构建
 

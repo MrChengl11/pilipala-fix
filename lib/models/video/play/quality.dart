@@ -116,6 +116,19 @@ extension VideoDecodeFormatsCode on VideoDecodeFormats {
   static final List<String> _codeList = ['dvh1', 'av01', 'hev1', 'avc1'];
   get code => _codeList[index];
 
+  /// codecs 串前缀 -> 解码格式。bilibili 同一编码有多种写法：
+  /// hvc1/hev1 都是 HEVC，dvhe/dvh1/dovi 都是杜比视界，avc3 也是 AVC。
+  static final Map<String, VideoDecodeFormats> _prefixMap = {
+    'dvh1': VideoDecodeFormats.DVH1,
+    'dvhe': VideoDecodeFormats.DVH1,
+    'dovi': VideoDecodeFormats.DVH1,
+    'av01': VideoDecodeFormats.AV1,
+    'hev1': VideoDecodeFormats.HEVC,
+    'hvc1': VideoDecodeFormats.HEVC,
+    'avc1': VideoDecodeFormats.AVC,
+    'avc3': VideoDecodeFormats.AVC,
+  };
+
   static VideoDecodeFormats? fromCode(String code) {
     final index = _codeList.indexOf(code);
     if (index != -1) {
@@ -124,14 +137,32 @@ extension VideoDecodeFormatsCode on VideoDecodeFormats {
     return null;
   }
 
+  /// 解析 codecs 串（如 'avc1.640032'、'hvc1.1.6.L120.90'）。
+  ///
+  /// 解析不出来时返回 null。原实现解析失败时默认返回 values.first(DVH1)，
+  /// 于是接口里任何不认识的 codecs（典型是 HEVC 的 hvc1.xxx）都会被显示成
+  /// 「DVH1」，用户一选就必然失败并被打回 AVC —— 这就是 Bug 2 的根因。
   static VideoDecodeFormats? fromString(String val) {
-    var result = VideoDecodeFormats.values.first;
-    for (var i in _codeList) {
-      if (val.startsWith(i)) {
-        result = VideoDecodeFormats.values[_codeList.indexOf(i)];
-        break;
+    final String lower = val.toLowerCase();
+    for (final entry in _prefixMap.entries) {
+      if (lower.startsWith(entry.key)) {
+        return entry.value;
       }
     }
-    return result;
+    return null;
+  }
+
+  /// 面板展示用名称：解析不出来时直接显示原始 codecs 串，不再伪装成 DVH1
+  static String descFromString(String val) =>
+      fromString(val)?.description ?? val;
+
+  /// 判断某条流的 codecs 串是否属于指定解码格式。
+  /// 统一走 [_prefixMap] 归一化，避免 supportFormats 写的是 hvc1.* 而 dash 里
+  /// 写的是 hev1.*（或 avc3/avc1）时对不上，导致明明有流却判定为不支持。
+  static bool matches(String? codecs, VideoDecodeFormats format) {
+    if (codecs == null || codecs.isEmpty) return false;
+    final VideoDecodeFormats? parsed = fromString(codecs);
+    if (parsed != null) return parsed == format;
+    return codecs.toLowerCase().startsWith(format.code);
   }
 }

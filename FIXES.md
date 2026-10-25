@@ -2,7 +2,7 @@
 
 本文件记录 PiliPala Fix 相对上游 [guozhigq/pilipala](https://github.com/guozhigq/pilipala) 1.0.27.0402 的全部改动。
 
-统计：**158 个文件，+5014 / -2052 行**。
+统计：**163 个文件，+5339 / -2546 行**（含第二轮 v1.0.27-fix2 的 26 个文件）。
 
 ---
 
@@ -218,6 +218,132 @@
 - `lib/models/json_field.dart`：新增 JSON 类型归一工具（见下）
 - 各处 `firstWhere` 补 `orElse` 或 `try/catch`
 - `lib/pages/dynamics/view.dart` 的 `_userLoginWorker` 字段类型修正
+
+---
+
+## 第二轮修复（v1.0.27-fix2）
+
+### 21. 直播间 / 切换解码格式后误报「播放失败，请返回重试」
+
+**现象**：进入直播间、或把解码格式切到 AV1/HEVC 后，播放器中间显示「播放失败，请返回重试」，但画面实际正常播放；退出再进也可能继承这个横幅。
+
+**根因**：`lib/plugin/pl_player/controller.dart` 的 `stream.error` 监听直接把 `DataStatus.error` 置上：
+
+```dart
+videoPlayerController!.stream.error.listen((String event) {
+  isBuffering.value = false;
+  dataStatus.status.value = DataStatus.error;   // 没有任何地方会复位
+});
+```
+
+media_kit 把 mpv 里**所有** `level=error` 的日志都从这里抛出，其中大量是「先报错、随后自动恢复」的可恢复告警：
+
+```
+plPlayer stream error: Cannot open file '': No such file or directory
+plPlayer stream error: Failed to open .
+plPlayer stream error: Can not open external file .
+plPlayer stream error: Cannot seek in this stream.
+plPlayer stream error: You can force it with '--force-seekable=yes'.
+```
+
+直播流（`seekable=false`）和首次探测必然触发这几条，于是「画面正常 + 横幅常驻」。另外 `_playerCount.value == 0` 分支会直接置 error，下一次进页面就继承横幅。
+
+**修复**（`lib/plugin/pl_player/controller.dart`）：
+
+- 新增「宽限期 + 进展判定」：`stream.error` 先挂起（`_hasPendingError`），起一个 `Timer`（首帧前 5s / 首帧后 3s），期内只要出现任一**真实进展**就撤销错误：`stream.position > 0`、`stream.width > 0`（解码出画面尺寸是最硬凭据）、或已出过画面且进度推进。全部没有才置 `DataStatus.error`。
+- 刻意**不**用 `stream.playing` 撤销错误 —— mpv 对彻底失败的地址也可能先报 `playing=true`，用它撤销会把真实失败变成永远转圈。
+- `setDataSource()` / 换源时调用 `_resetPlaybackState()` 复位；`dispose()` 里把共享单例的 `dataStatus` 复位为 `none`，不再把 error 残留给下一个页面。
+- 新增 `_released` 标记挡住「页面已退出、异步取流请求后才回来」的竞态（旧代码这时会往共享状态写 error）。
+- `_playerCount.value == 0` 分支改为补回计数并重建 `Player`，不再直接置 error。
+- `lib/plugin/pl_player/view.dart` 的错误横幅逻辑加注释并保持「错误态优先但有进度即清」。
+
+---
+
+### 22. 切换解码格式（AV1 / DVH1）失败，DVH1 被打回 AVC
+
+**根因 1**：`lib/models/video/play/quality.dart` 的 `fromString` 解析不出来时**默认返回 `values.first`，即 DVH1**：
+
+```dart
+static VideoDecodeFormats? fromString(String val) {
+  var result = VideoDecodeFormats.values.first;   // DVH1
+  for (var i in _codeList) { if (val.startsWith(i)) { ... } }
+  return result;
+}
+```
+
+接口里 HEVC 的 codecs 是 `hvc1.*`（不在 `_codeList` 的 `['dvh1','av01','hev1','avc1']` 里），于是**任何 HEVC 流都被解析成 DVH1**，面板显示和实际码流彻底错位；用户选 DVH1 时又找不到对应流，被静默改回默认 AVC。
+
+**根因 2**：`updatePlayer()` 用 `(i.codecs ?? '').startsWith(decodeCode)` 匹配，与 `supportFormats` 里的写法（`hev1`/`hvc1`、`avc1`/`avc3`）不一致时对不上，然后进 `catch` 把选择改回默认值。
+
+**修复**：
+
+- `quality.dart`：新增 `_prefixMap` 做前缀归一（`dvh1`/`dvhe`/`dovi` → DVH1，`av01` → AV1，`hev1`/`hvc1` → HEVC，`avc1`/`avc3` → AVC）；`fromString` 改为小写归一、**解析失败返回 `null`**；新增 `descFromString`（展示用）与 `matches(String? codecs, VideoDecodeFormats)`（选流用）。
+- `lib/pages/video/detail/controller.dart` `updatePlayer()`：用 `matches()` 真正选流；当前画质下没有该编码时，带 `fromDecodeSwitch` 的情况到**完整 dash 列表**里再找（DVH1 只存在于 `qn=126`），找到就切换画质并 toast 告知；确实没有则把面板解码格式同步成实际在播的编码并明确提示，不再静默改回 AVC。切画质/音质时（不带 `fromDecodeSwitch`）编码让位，避免被锁死在 126 画质。
+- `queryVideoUrl()` 的 dash 分支：`fromString` 可能返回 null，显式兜底到 AVC；用 `matches()` 选流；若走 `orElse` 则把 `currentDecodeFormats` 同步成真实流，保证「面板显示 = 实际在播」。
+- `lib/pages/video/detail/widgets/header_control.dart`：每个 `ListTile` 包 `Builder`，解析 `target`；`target == null` 时 toast「暂不支持该解码格式」；选中项显示 `Icons.done`，标题用 `descFromString`、副标题给原始 codecs。
+
+---
+
+### 23. 部分弹幕滚动到一半消失
+
+**根因**（内置弹幕引擎 `ns_danmaku`）主要有三个，症状同为「弹幕凭空消失」：
+
+**主因** `lib/transition/scroll_item_view.dart`：
+
+```dart
+duration: Duration(seconds: widget.duration.floor())   // duration < 1.0 => Duration.zero
+```
+
+`AnimationController.forward()` 对零时长**同步**完成，立刻触发 status listener → `onComplete(id)` → 从 `_scrollWidgets` 移除。于是弹幕要么从未可见、要么闪一帧就没了。而 `duration = danmakuDurationVal / playbackSpeed`，滑块最小值 2、默认 4.0、长按倍速再 ×2，所以 duration < 1.0 是常规可达状态。
+
+**次因** id 碰撞：`key.toString()` 在 release AOT 下是 20 位 shortHash，两条弹幕可能撞 id，`_scrollWidgets.addAll` 会把**还在屏幕上**的那条覆盖掉。
+
+**三因** `ConcurrentModificationError`：`resume()` / `updateOption()` 直接迭代 `_controllers` 并在回调里增删，异常中止循环后条目被冻结。
+
+**修复**（把引擎改为本地 vendored、可打补丁）：
+
+- `pubspec.yaml`：`ns_danmaku` 从 `git` 依赖改为 `path: packages/ns_danmaku`，内置已打补丁的副本。
+- `lib/danmaku_view.dart`：新增单调递增 `_idSeed` / `_nextId()` 取代 `key.toString()`；`Timer.periodic` 由 1s 改 100ms（`_runTime += 0.1`）以提高位置精度、让小 duration 也跨越足够帧；`updateOption()` 增加 `_sameOption` 早退（`setDataSource` 会触发 `setPlaybackSpeed(1.0)`，避免无谓重建）；duration/暂停/恢复循环全部先 `keys.toList()` 快照。
+- `lib/transition/scroll_item_view.dart` / `position_item_view.dart`：新增 required `String id`；`_computeDuration()` 用**微秒**精度并夹到 `[200ms, 600s]`，替换 `Duration(seconds: floor())`；`onComplete` 传 `widget.id` 而非 `widget.key.toString()`。
+
+---
+
+### 24. 外观设置「图片质量」无法调整
+
+**根因**：`lib/pages/setting/style_setting.dart` 把对话框的临时值声明在 `StatefulBuilder` 的 builder **内部**：
+
+```dart
+builder: (context, StateSetter setState) {
+  int tempQuality = picQuality;   // 每次 setState 触发的 rebuild 都会重置
+  ...
+}
+```
+
+滑块 `onChanged` 里 `setState(() => tempQuality = v)` 先改值再 rebuild，而 rebuild 立刻把 `tempQuality` 重置回 `picQuality`，视觉上就是「拖一下就弹回原位」。
+
+**修复**：把 `int tempQuality = picQuality;` 提到 `showDialog` 的 builder **之外**（闭包只初始化一次），滑块即可正常拖动、确定后写回、取消不写入。
+
+---
+
+### 25. 登录成功后仍弹「登录遇到问题」，需重启应用
+
+**现象**：登录流程走完（实际已登录）时，会滚动弹出错误对话框，内容是 `"MediaController" not found. You need to call "Get.put(MediaController())"` 之类；重启应用才恢复正常。
+
+**根因**：`lib/utils/login.dart` 的 `confirmLogin` / `refreshLoginStatus` 直接 `Get.find<T>()`：
+
+```dart
+MineController mineCtr = Get.find<MineController>();
+DynamicsController dynamicsCtr = Get.find<DynamicsController>();
+MediaController mediaCtr = Get.find<MediaController>();
+```
+
+而这三个控制器只在**对应底部导航项开启时**才会 `Get.put`（`lib/pages/main/view.dart:99-110` 的 `controllerInit` 里按 `pagesIds` 条件注册）。媒体库 tab 关闭时不注册，`Get.find` 抛异常，外层 `catch` 把它弹成「登录遇到问题」对话框 —— 登录其实已经成功。
+
+**修复**：
+
+- 新增 `static T? _tryFind<T extends GetxController>()`：先 `Get.isRegistered<T>()` 再 `Get.find<T>()`，并 `try/catch` 兜底返回 `null`。
+- `refreshLoginStatus`：每个控制器独立判空，缺失就跳过；整体失败只 `debugPrint`，不再弹 toast。
+- `confirmLogin`：缓存/请求头同步、控制器同步、`refreshLoginStatus` 各自独立 `try/catch`，失败只记日志；移除「登录遇到问题」`AlertDialog`（登录成功就是成功，后置刷新失败不该否定它）。
 
 ---
 

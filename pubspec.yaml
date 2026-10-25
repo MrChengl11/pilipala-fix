@@ -112,11 +112,9 @@ dependencies:
   flutter_displaymode: ^0.6.0
   # scheme跳转
   appscheme: ^1.0.8
-  # 弹幕
+  # 弹幕（本地 vendored 版本，已修复弹幕滚动中途消失的问题）
   ns_danmaku:
-    git:
-      url: https://github.com/guozhigq/flutter_ns_danmaku.git
-      ref: master
+    path: packages/ns_danmaku
   # 状态栏图标控制
   status_bar_control: ^3.2.1
   # 代理
