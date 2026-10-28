@@ -3,9 +3,14 @@ import 'package:pilipala/http/danmaku.dart';
 import 'package:pilipala/models/danmaku/dm.pb.dart';
 
 class PlDanmakuController {
-  PlDanmakuController(this.cid, this.type);
+  PlDanmakuController(this.cid, this.type, {this.offlineSegMap});
   final int cid;
   final String type;
+
+  /// 离线下载好的弹幕（key 为段号，从 1 开始），命中后不再联网请求
+  final Map<int, List<DanmakuElem>>? offlineSegMap;
+
+  bool get isOffline => offlineSegMap != null && offlineSegMap!.isNotEmpty;
   Map<int, List<DanmakuElem>> dmSegMap = {};
   // 已请求的段落标记
   List<bool> requestedSeg = [];
@@ -45,6 +50,18 @@ class PlDanmakuController {
       return;
     }
     requestedSeg[segmentIndex] = true;
+
+    // 离线缓存优先：直接使用本地已下载的弹幕，不发起网络请求
+    final List<DanmakuElem>? offline = offlineSegMap?[segmentIndex + 1];
+    if (offline != null) {
+      for (final DanmakuElem element in offline) {
+        final int pos = element.progress ~/ 100;
+        dmSegMap[pos] ??= <DanmakuElem>[];
+        dmSegMap[pos]!.add(element);
+      }
+      return;
+    }
+
     try {
       final DmSegMobileReply result = await DanmakaHttp.queryDanmaku(
           cid: cid, segmentIndex: segmentIndex + 1);

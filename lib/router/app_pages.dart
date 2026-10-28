@@ -16,6 +16,7 @@ import 'package:pilipala/pages/setting/pages/logs.dart';
 
 import '../pages/about/index.dart';
 import '../pages/blacklist/index.dart';
+import '../pages/download/index.dart';
 import '../pages/dynamics/detail/index.dart';
 import '../pages/dynamics/index.dart';
 import '../pages/fan/index.dart';
@@ -39,6 +40,7 @@ import '../pages/member_dynamics/index.dart';
 import '../pages/member_like/index.dart';
 import '../pages/member_search/index.dart';
 import '../pages/member_seasons/index.dart';
+import '../pages/offline/index.dart';
 import '../pages/search/index.dart';
 import '../pages/search_result/index.dart';
 import '../pages/setting/extra_setting.dart';
@@ -86,6 +88,10 @@ class Routes {
     CustomGetPage(name: '/favDetail', page: () => const FavDetailPage()),
     // 稍后再看
     CustomGetPage(name: '/later', page: () => const LaterPage()),
+    // 离线缓存（下载管理）
+    CustomGetPage(name: '/download', page: () => const DownloadPage()),
+    // 离线播放
+    CustomGetPage(name: '/offline', page: () => const OfflinePage()),
     // 历史记录
     CustomGetPage(name: '/history', page: () => const HistoryPage()),
     // 搜索页面

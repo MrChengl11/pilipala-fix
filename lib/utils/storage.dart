@@ -9,6 +9,8 @@ class GStrorage {
   static late final Box<dynamic> localCache;
   static late final Box<dynamic> setting;
   static late final Box<dynamic> video;
+  // 离线下载任务表（key = cid 字符串）
+  static late final Box<dynamic> download;
 
   static Future<void> init() async {
     final Directory dir = await getApplicationSupportDirectory();
@@ -40,6 +42,13 @@ class GStrorage {
     );
     // 视频设置
     video = await Hive.openBox('video');
+    // 离线下载任务
+    download = await Hive.openBox(
+      'download',
+      compactionStrategy: (int entries, int deletedEntries) {
+        return deletedEntries > 4;
+      },
+    );
   }
 
   static void regAdapter() {
@@ -59,6 +68,8 @@ class GStrorage {
     await setting.close();
     await video.compact();
     await video.close();
+    await download.compact();
+    await download.close();
   }
 }
 
@@ -122,7 +133,17 @@ class SettingBoxKey {
       enableSystemProxy = 'enableSystemProxy',
       enableAi = 'enableAi',
       defaultHomePage = 'defaultHomePage',
-      enableRelatedVideo = 'enableRelatedVideo';
+      enableRelatedVideo = 'enableRelatedVideo',
+
+      /// 离线下载
+      // 仅在 Wi-Fi 下自动开始下载
+      downloadOnlyWifi = 'downloadOnlyWifi',
+      // 是否同时缓存弹幕
+      downloadWithDanmaku = 'downloadWithDanmaku',
+      // 离线缓存默认清晰度（qn），未设置时跟随默认画质
+      downloadQuality = 'downloadQuality',
+      // 删除任务时是否连带删除文件
+      downloadDeleteFile = 'downloadDeleteFile';
 
   /// 外观
   static const String themeMode = 'themeMode',

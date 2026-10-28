@@ -2,7 +2,7 @@
 
 本文件记录 PiliPala Fix 相对上游 [guozhigq/pilipala](https://github.com/guozhigq/pilipala) 1.0.27.0402 的全部改动。
 
-统计：**163 个文件，+5339 / -2546 行**（含第二轮 v1.0.27-fix2 的 26 个文件）。
+统计：**180 个文件，+7178 / -2551 行**（含第二轮 v1.0.27-fix2 的 26 个文件、第三轮 v1.0.27-fix3 的离线缓存）。
 
 ---
 
@@ -344,6 +344,59 @@ MediaController mediaCtr = Get.find<MediaController>();
 - 新增 `static T? _tryFind<T extends GetxController>()`：先 `Get.isRegistered<T>()` 再 `Get.find<T>()`，并 `try/catch` 兜底返回 `null`。
 - `refreshLoginStatus`：每个控制器独立判空，缺失就跳过；整体失败只 `debugPrint`，不再弹 toast。
 - `confirmLogin`：缓存/请求头同步、控制器同步、`refreshLoginStatus` 各自独立 `try/catch`，失败只记日志；移除「登录遇到问题」`AlertDialog`（登录成功就是成功，后置刷新失败不该否定它）。
+
+
+---
+
+## 第三轮新增（v1.0.27-fix3）：离线缓存
+
+上游 1.0.27.0402 的「离线缓存」是半成品：`lib/pages/media/controller.dart` 里只声明了一个 `title: '离线缓存'` 的列表项，没有 `onTap`，`lib/pages/media/view.dart` 因此按不可点击渲染成灰色 + 右侧「暂未支持」；`lib/http/init.dart` 里虽有一个 `downloadFile()`，但全库零调用方。
+
+本轮把它补齐：**下载 → 管理 → 离线播放 → 离线弹幕**整条链路。
+
+### 26. 下载器：DASH 双轨 + Range 断点续传
+
+**实现**：`lib/models/download/download_manager.dart`（单例 `DownloadManager.instance`）。
+
+- **取流**：复用 `VideoHttp.videoUrl(cid:, bvid:, qn:)`（已含 WBI 签名与 Cookie），`fnval: 4048` 拿到 DASH 描述。
+- **选流**：`_pickVideo(videos, quality)` 按 qn 精确匹配，找不到则取码率最高的一项；`_pickAudio(audios, audioId)` 优先匹配当前音质，否则取最高。
+- **落盘**：`video.m4s` + `audio.m4s` 分别写入 `<ApplicationSupportDirectory>/offline/<cid>/`（应用私有目录，无需任何存储权限）。
+- **续传**：`_downloadSingle()` 先按已有文件长度拼 `Range: bytes=<received>-` 请求；校验 `Content-Range` 的总长，连接提前结束时抛错由上层换镜像重试。
+- **镜像容错**：`_urlCandidates()` 把 `baseUrl` 与 `backupUrl` 组成候选列表逐个尝试（B 站 CDN 会 302，单节点偶发 5xx）。
+- **并发**：`maxConcurrent = 2`，`_pump()` 从任务表挑 `waiting` 补位；`_tokens` 保存每个任务的 `CancelToken` 以支持暂停。
+- **持久化**：Hive box `download`（key = cid 字符串），字段见 `lib/models/download/download_task.dart`；`_save()` 后 `tasks.refresh()` 触发 UI 更新。
+
+### 27. 弹幕缓存：Protobuf 原样落盘
+
+**实现**：`_downloadDanmaku()` + `_fetchDanmaku()`。
+
+- 按 `PlDanmakuController.segmentLength`（6 分钟）算段数，逐段写入 `danmaku/<n>.pb`，内容就是 `DmSegMobileReply.writeToBuffer()` 的原始字节，不做解码再编码。
+- **踩坑**：不能直接复用项目的 `DanmakaHttp.queryDanmaku`。`Request.dio` 默认 UA 是 Mac Safari（`lib/http/init.dart:330-333`），而 `/x/v2/dm/web/seg.so` 对 Safari UA 会返回 `{"code":-352}` 的 JSON 风控响应，`responseType: bytes` 下拿到 39 字节 JSON，`fromBuffer` 直接抛错；另外 `ApiInterceptor.onError` 会给每次失败弹全局 toast。
+- **改法**：新建私有方法 `_fetchDanmaku()`，用独立 `_dio` + 桌面 Chrome UA（`_danmakuUa`）+ 当前 Cookie 直连，`responseType: ResponseType.bytes`，失败重试 2 次后静默返回 `null`，只打日志。
+- **读取**：`loadDanmaku(cid)` 扫 `danmaku/*.pb`，key 用文件名里的段号（从 1 开始）；`PlDanmakuController.queryDanmaku` 加离线分支——命中 `offlineSegMap[segmentIndex + 1]` 就直接分桶进 `dmSegMap` 并 `return`，不再联网。
+
+### 28. 离线播放页
+
+**实现**：`lib/pages/offline/`（`view.dart` / `controller.dart` / `widgets/offline_header.dart`），路由 `/offline`。
+
+- **不复用详情页 Controller**：`VideoDetailController` 的 `onInit` 强依赖 `Get.parameters['bvid']`/`['cid']` 并会去线上取流，离线场景没有这些前提。
+- **DataSource**：`DataSource(file: videoFile, videoSource: videoPath, audioSource: hasAudio ? audioPath : null, type: DataSourceType.file, httpHeaders: null)`。`DataSourceType.file` 上游至今零使用，本轮首次启用。
+- **音轨挂载**：`_createVideoController` 里 `pp.setProperty('audio-files', audioSource)` 天然支持第二个文件，这就是不需要 ffmpeg 合流的原因。
+- **弹幕**：`PlDanmaku(offlineSegMap: ...)` 透传到 `PlDanmakuController`。
+- **进度记忆**：退出时 `saveProgress()` 把 `plPlayerController.position.value` 写回任务表，下次 `setDataSource(seekTo:)` 续播。
+- **主题色**：`Scaffold` 底色用 `colorScheme.surface`（仅播放器区域保持黑），状态栏图标按 `Get.isDarkMode` 与全屏状态切 `SystemUiOverlayStyle`。
+
+### 29. 下载管理页与入口
+
+- `lib/pages/download/`：`/download` 路由，列表项显示封面/标题/画质/进度条/体积，支持暂停、继续、长按删除（可连带删文件）；顶部显示已占用空间。
+- 入口两处：媒体库「离线缓存」（原假入口接上 `onTap`）、详情页「更多」面板第二项（副标题动态显示当前画质与已缓存状态）。
+- 新增设置项（`SettingBoxKey`）：`downloadOnlyWifi` / `downloadWithDanmaku`。
+
+### 已知限制
+
+- 未登录时最高只能拿到 480P（`qn=32`），与站点策略一致；这是取流接口的限制，不是下载器的限制。
+- 暂不支持番剧（`bangumi`）与直播回放，仅支持普通稿件 `ugc` 流。
+- 不支持下载中途切画质，需删除任务后重新添加。
 
 ---
 

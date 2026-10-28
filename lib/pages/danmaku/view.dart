@@ -17,12 +17,16 @@ class PlDanmaku extends StatefulWidget {
   final String type;
   final Function(DanmakuController)? createdController;
 
+  /// 离线播放时传入已下载的弹幕（key 为段号，从 1 开始）
+  final Map<int, List<DanmakuElem>>? offlineSegMap;
+
   const PlDanmaku({
     super.key,
     required this.cid,
     required this.playerController,
     this.type = 'video',
     this.createdController,
+    this.offlineSegMap,
   });
 
   @override
@@ -50,7 +54,9 @@ class _PlDanmakuState extends State<PlDanmaku> {
     super.initState();
     enableShowDanmaku =
         setting.get(SettingBoxKey.enableShowDanmaku, defaultValue: false);
-    _plDanmakuController = PlDanmakuController(widget.cid, widget.type);
+    _plDanmakuController = PlDanmakuController(
+      widget.cid, widget.type,
+      offlineSegMap: widget.offlineSegMap);
     playerController = widget.playerController;
     if (mounted && widget.type == 'video') {
       if (enableShowDanmaku || playerController.isOpenDanmu.value) {

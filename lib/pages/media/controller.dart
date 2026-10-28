@@ -11,9 +11,9 @@ class MediaController extends GetxController {
   RxBool userLogin = false.obs;
   List list = [
     {
-      // 离线缓存尚未实现：不提供 onTap，入口按不可点击样式渲染
       'icon': Icons.file_download_outlined,
       'title': '离线缓存',
+      'onTap': () => Get.toNamed('/download'),
     },
     {
       'icon': Icons.history,

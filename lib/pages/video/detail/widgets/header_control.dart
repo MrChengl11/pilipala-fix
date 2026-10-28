@@ -9,6 +9,8 @@ import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:ns_danmaku/ns_danmaku.dart';
 import 'package:pilipala/http/user.dart';
+import 'package:pilipala/models/download/download_manager.dart';
+import 'package:pilipala/models/download/download_task.dart';
 import 'package:pilipala/models/video/play/quality.dart';
 import 'package:pilipala/models/video/play/url.dart';
 import 'package:pilipala/pages/dlna/index.dart';
@@ -157,6 +159,21 @@ class _HeaderControlState extends State<HeaderControl> {
                       title: const Text('添加至「稍后再看」', style: titleStyle),
                     ),
                     ListTile(
+                      onTap: () => {Get.back(), addToDownload()},
+                      dense: true,
+                      leading: const Icon(Icons.download_outlined, size: 20),
+                      title: const Text('离线缓存', style: titleStyle),
+                      subtitle: Text(
+                        _downloadSubtitle(),
+                        style: subTitleStyle,
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                    ListTile(
                       onTap: () => {Get.back(), scheduleExit()},
                       dense: true,
                       leading:
@@ -216,6 +233,46 @@ class _HeaderControlState extends State<HeaderControl> {
       clipBehavior: Clip.hardEdge,
       isScrollControlled: true,
     );
+  }
+
+  /// 离线缓存入口的副标题：显示当前画质、已有任务状态与体积
+  String _downloadSubtitle() {
+    final int cid = widget.videoDetailCtr!.cid.value;
+    final DownloadTask? task = DownloadManager.instance.taskOf(cid);
+    final String qaDesc = widget.videoDetailCtr!.currentVideoQa.description;
+    if (task != null) {
+      final String size = DownloadTask.sizeText(
+          task.receivedBytes > 0 ? task.receivedBytes : task.totalBytes);
+      return '已缓存 $qaDesc · ${task.statusText} · $size';
+    }
+    return '缓存 $qaDesc 到本机，可离线播放';
+  }
+
+  /// 把当前视频加入离线下载队列
+  Future<void> addToDownload() async {
+    final VideoDetailController ctr = widget.videoDetailCtr!;
+    final String title = videoIntroController.videoDetail.value.title ??
+        (ctr.videoItem['title'] as String?) ??
+        '';
+    // 详情接口的 duration 单位是秒，取流接口的 timelength 是毫秒，
+    // 统一换算成毫秒存进任务（弹幕分段按毫秒算）
+    int duration = (videoIntroController.videoDetail.value.duration ?? 0) * 1000;
+    if (duration <= 0) {
+      duration = ctr.data.timeLength ?? 0;
+    }
+    final DownloadTask? task = await DownloadManager.instance.add(
+      cid: ctr.cid.value,
+      bvid: ctr.bvid,
+      title: title,
+      cover: ctr.cover.value,
+      duration: duration,
+      quality: VideoQualityCode.toCode(ctr.currentVideoQa) ?? 0,
+    );
+    if (task == null) {
+      SmartDialog.showToast('该视频已缓存完成');
+      return;
+    }
+    SmartDialog.showToast('已加入下载队列，可在「我的 → 离线缓存」查看');
   }
 
   /// 发送弹幕
