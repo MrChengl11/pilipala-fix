@@ -392,6 +392,22 @@ MediaController mediaCtr = Get.find<MediaController>();
 - 入口两处：媒体库「离线缓存」（原假入口接上 `onTap`）、详情页「更多」面板第二项（副标题动态显示当前画质与已缓存状态）。
 - 新增设置项（`SettingBoxKey`）：`downloadOnlyWifi` / `downloadWithDanmaku`。
 
+### 30. 「我的订阅」整页变成半屏灰块、无法滚动
+
+**现象**：媒体库 → 我的订阅，列表封面右侧出现一整块浅灰色，页面只能看到第一项且无法滚动。
+
+**根因**：`lib/pages/subscription/widgets/item.dart` 在「修复卡片溢出」时把布局改成
+`Row > Expanded > ConstrainedBox > VideoContent`，但 `VideoContent` 自身仍 `return Expanded(...)`。
+`Expanded` 是 `ParentDataWidget`，必须直接挂在 `Row/Column` 下；隔着 `ConstrainedBox` 时
+release 包抛 `type 'ParentData' is not a subtype of type 'FlexParentData'`，
+该文字区被替换成默认 `ErrorWidget`（浅灰色、约束高 100000），整行被撑爆，视觉上就是半屏灰块。
+
+**修复**：`VideoContent` 不再返回 `Expanded`（外层已有 `Expanded`），改为普通 `Padding > Column`；
+封面固定宽高，文字区用 `ConstrainedBox(minHeight: 封面高)` 保持齐平、内容自然撑高。
+新增 `test/subscription_item_test.dart` 覆盖 360dp 窄屏与 1.3 倍字体两种场景。
+
+---
+
 ### 已知限制
 
 - 未登录时最高只能拿到 480P（`qn=32`），与站点策略一致；这是取流接口的限制，不是下载器的限制。

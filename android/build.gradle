@@ -1,6 +1,11 @@
 buildscript {
     ext.kotlin_version = '1.9.0'
     repositories {
+        // 国内直连 google()/mavenCentral() 经常只有几十 KB/s，
+        // 优先走阿里云镜像，找不到的构件再回退原仓库。
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
         google()
         mavenCentral()
     }
@@ -13,6 +18,9 @@ buildscript {
 
 allprojects {
     repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
         google()
         mavenCentral()
     }

@@ -94,74 +94,78 @@ class VideoContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 2, 6, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              subFolderItem.title!,
-              textAlign: TextAlign.start,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.3,
-                height: 1.2,
-              ),
+    // 注意：这里不能返回 Expanded。调用方 SubItem 已经把本组件放进
+    // Row > Expanded > ConstrainedBox 里，ParentDataWidget(Expanded)
+    // 只有在直接父级是 Flex(Row/Column) 时才合法；隔着 ConstrainedBox
+    // 会在 release 包里抛 "type 'ParentData' is not a subtype of type
+    // 'FlexParentData'"，整块文字区被替换成浅灰色的 ErrorWidget
+    // （高 100000，把整页撑成一片灰）。
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 2, 6, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            subFolderItem.title!,
+            textAlign: TextAlign.start,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.3,
+              height: 1.2,
             ),
-            const SizedBox(height: 2),
-            Text(
-              '合集 UP主：${subFolderItem.upper!.name!}',
-              textAlign: TextAlign.start,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: Theme.of(context).textTheme.labelMedium!.fontSize,
-                height: 1.2,
-                color: Theme.of(context).colorScheme.outline,
-              ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '合集 UP主：${subFolderItem.upper!.name!}',
+            textAlign: TextAlign.start,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: Theme.of(context).textTheme.labelMedium!.fontSize,
+              height: 1.2,
+              color: Theme.of(context).colorScheme.outline,
             ),
-            const SizedBox(height: 2),
-            Text(
-              '${subFolderItem.mediaCount}个视频',
-              textAlign: TextAlign.start,
-              style: TextStyle(
-                fontSize: Theme.of(context).textTheme.labelMedium!.fontSize,
-                height: 1.2,
-                color: Theme.of(context).colorScheme.outline,
-              ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${subFolderItem.mediaCount}个视频',
+            textAlign: TextAlign.start,
+            style: TextStyle(
+              fontSize: Theme.of(context).textTheme.labelMedium!.fontSize,
+              height: 1.2,
+              color: Theme.of(context).colorScheme.outline,
             ),
-            const SizedBox(height: 2),
-            isOwner
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      IconButton(
-                        // 不限制尺寸时 IconButton 会占满 48x48 的最小点击区，
-                        // 直接把这一行撑到 48dp 高。这里收成 24x24。
-                        constraints: const BoxConstraints.tightFor(
-                          width: 24,
-                          height: 24,
-                        ),
-                        padding: EdgeInsets.zero,
-                        style: ButtonStyle(
-                          padding: MaterialStateProperty.all(EdgeInsets.zero),
-                        ),
-                        onPressed: () => cancelSub?.call(subFolderItem),
-                        icon: Icon(
-                          Icons.clear_outlined,
-                          color: Theme.of(context).colorScheme.outline,
-                          size: 18,
-                        ),
-                      )
-                    ],
-                  )
-                : const SizedBox()
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          isOwner
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      // 不限制尺寸时 IconButton 会占满 48x48 的最小点击区，
+                      // 直接把这一行撑到 48dp 高。这里收成 24x24。
+                      constraints: const BoxConstraints.tightFor(
+                        width: 24,
+                        height: 24,
+                      ),
+                      padding: EdgeInsets.zero,
+                      style: ButtonStyle(
+                        padding: MaterialStateProperty.all(EdgeInsets.zero),
+                      ),
+                      onPressed: () => cancelSub?.call(subFolderItem),
+                      icon: Icon(
+                        Icons.clear_outlined,
+                        color: Theme.of(context).colorScheme.outline,
+                        size: 18,
+                      ),
+                    )
+                  ],
+                )
+              : const SizedBox()
+        ],
       ),
     );
   }
