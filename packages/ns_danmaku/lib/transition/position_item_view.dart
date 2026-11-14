@@ -103,14 +103,23 @@ class _PositionItemViewState extends State<PositionItemView>
                   strokeWidth: widget.strokeWidth,
                   isSend: widget.isSend,
                 )
-              : Text(
-                  widget.text,
-                  style: TextStyle(
-                    color: widget.color,
-                    fontSize: widget.fontSize,
-                    letterSpacing: 2,
-                    overflow: TextOverflow.visible,
-                    backgroundColor: widget.isSend ? getBorderColor(widget.color) : null
+              : DefaultTextStyle(
+                  // 与 DanmakuBorderText / 滚动弹幕同理：隔离外部字体度量，
+                  // 保证排版与 DanmakuView.calculateTextSize() 的测量一致。
+                  style: const TextStyle(),
+                  softWrap: false,
+                  overflow: TextOverflow.visible,
+                  child: Text(
+                    widget.text,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: widget.color,
+                      fontSize: widget.fontSize,
+                      overflow: TextOverflow.visible,
+                      backgroundColor:
+                          widget.isSend ? getBorderColor(widget.color) : null,
+                    ),
                   ),
                 ),
         ),

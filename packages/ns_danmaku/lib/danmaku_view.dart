@@ -147,24 +147,35 @@ class _DanmakuViewState extends State<DanmakuView> {
     //计算此弹幕尺寸
     var danmuSize =
         calculateTextSize(e.text, _option.fontSize, _option.strokeWidth);
+    // 空文本 / 尚未完成布局（_viewWidth == 0）时无法算出合法的滚动参数，
+    // 直接丢弃，避免 Infinity / NaN 进入 SlideTransition 的变换矩阵。
+    if (danmuSize.width <= 0 || _viewWidth <= 0) {
+      return;
+    }
+    // 绘制盒比文本宽出「描边 + 2px」：
+    // Text 不会把描边算进布局宽度，字形墨迹/描边可能比文本右缘多出约
+    // strokeWidth/2 像素。盒子右侧留出这段空白后，弹幕滚到终点
+    // （盒子右缘=0）时文本早已完全移出裁剪区，不会在视频左边缘留下
+    // 半个字符 / 几像素宽的残片。
+    final double itemWidth = danmuSize.width + _option.strokeWidth + 2.0;
     //初始x坐标为0,即在屏幕的最左侧
     //x坐标为1时是弹幕自身宽度的1倍
     //将弹幕起始位置设置在屏幕的最右侧，x=容器宽度/弹幕宽度
-    var begin = _viewWidth / danmuSize.width;
+    var begin = _viewWidth / itemWidth;
     double end = -1;
     if (begin < 1) {
       begin = 1;
-      end = -(danmuSize.width / _viewWidth);
+      end = -(itemWidth / _viewWidth);
     }
     //路程
-    var distance = _viewWidth + danmuSize.width;
+    var distance = _viewWidth + itemWidth;
 
     //速度
     var speed = distance / _option.duration;
 
     //出站时间,即弹幕已经完全从右侧移出
     var outboundTime =
-        _runTime + (_option.duration * (danmuSize.width / distance));
+        _runTime + (_option.duration * (itemWidth / distance));
 
     var y = commputeScrollAvailableRow(
       RowInfo(
@@ -172,7 +183,7 @@ class _DanmakuViewState extends State<DanmakuView> {
         joinTime: _runTime,
         outTime: outboundTime,
         speed: speed,
-        width: danmuSize.width,
+        width: itemWidth,
       ),
     );
 
@@ -192,7 +203,7 @@ class _DanmakuViewState extends State<DanmakuView> {
         begin: begin,
         end: end,
         y: y.toDouble() * 1.2,
-        size: Size(danmuSize.width, _itemHeight),
+        size: Size(itemWidth, _itemHeight),
         color: e.color,
         fontSize: _option.fontSize,
         onComplete: onItemComplete,
@@ -465,12 +476,25 @@ class _DanmakuViewState extends State<DanmakuView> {
 
   /// 弹幕动画运行完成
   void onItemComplete(String id) {
-    _scrollWidgets.remove(id);
-    _positionWidgets.remove(id);
+    final hadScroll = _scrollWidgets.remove(id) != null;
+    final hadPosition = _positionWidgets.remove(id) != null;
     _controllers.remove(id);
     _scrollIDs.remove(id);
     _topIDs.remove(id);
     _bottomIDs.remove(id);
+    // 修复：原实现只从 Map 里删条目、不触发重建，已完成的 ScrollItemView 仍挂在
+    // element 树上继续绘制（SlideTransition 停在终点，字形可能残留几像素），
+    // 要等下一条弹幕 addItems 才顺带重建 —— 这就是「残影过几秒才消失」。
+    // 这里改成立即通知重建，让完成的那一帧之后就被移除。
+    //
+    // 注意不能在 build/layout 阶段调用 setState（会抛
+    // "setState() or markNeedsBuild() called during build"），
+    // 动画状态回调可能恰好在帧回调里，故统一挪到下一个 microtask。
+    if (hadScroll || hadPosition) {
+      scheduleMicrotask(() {
+        setState(() {});
+      });
+    }
   }
 
   @override
@@ -524,18 +548,27 @@ class _DanmakuViewState extends State<DanmakuView> {
   }
 
   /// 计算文本尺寸
+  ///
+  /// 这里的 TextStyle 必须与 ScrollItemView / DanmakuBorderText 里真正绘制
+  /// 时使用的有效样式逐项一致（DanmakuBorderText 已通过空 DefaultTextStyle
+  /// 隔离外部继承），否则测量宽度会小于绘制宽度，滚动到终点就会留下残影。
+  /// 因此这里显式补齐 Text 会额外应用的属性：
+  /// - textScaler：用 MediaQuery.textScalerOf 而不是已废弃的 textScaleFactor；
+  /// - boldText：系统开启「粗体文本」时 Text 会 merge FontWeight.bold，
+  ///   粗体字形更宽，测量也必须按粗体算。
   Size calculateTextSize(String value, double fontSize, double strokeWidth) {
-    //var letterSpacing = (fontSize / 20).ceil() * 2.0;
+    final bool boldText = MediaQuery.boldTextOf(context);
     TextPainter painter = TextPainter(
       locale: Localizations.localeOf(context),
       maxLines: 1,
-      textDirection: TextDirection.ltr,
-      textScaleFactor: MediaQuery.of(context).textScaleFactor,
+      textAlign: TextAlign.left,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
       text: TextSpan(
         text: value,
         style: TextStyle(
           fontSize: fontSize,
-          // letterSpacing: letterSpacing,
+          fontWeight: boldText ? FontWeight.bold : null,
           overflow: TextOverflow.visible,
           foreground: Paint()
             ..style = PaintingStyle.stroke

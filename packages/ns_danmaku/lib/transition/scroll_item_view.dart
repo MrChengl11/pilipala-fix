@@ -117,14 +117,24 @@ class _ScrollItemViewState extends State<ScrollItemView>
                 strokeWidth: widget.strokeWidth,
                 isSend: widget.isSend,
               )
-            : Text(
-                widget.text,
-                style: TextStyle(
-                  color: widget.color,
-                  fontSize: widget.fontSize,
-                  letterSpacing: 2,
-                  overflow: TextOverflow.visible,
-                  backgroundColor: widget.isSend ? getBorderColor(widget.color) : null
+            : DefaultTextStyle(
+                // 与 DanmakuBorderText 同理：重置外部字体度量。
+                // 原来这里还额外设了 letterSpacing: 2，而测量时并没有算
+                // 这份字距，绘制宽度会比测量宽度多 2×字符数，同样会残留。
+                style: const TextStyle(),
+                softWrap: false,
+                overflow: TextOverflow.visible,
+                child: Text(
+                  widget.text,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: widget.color,
+                    fontSize: widget.fontSize,
+                    overflow: TextOverflow.visible,
+                    backgroundColor:
+                        widget.isSend ? getBorderColor(widget.color) : null,
+                  ),
                 ),
               ),
       ),

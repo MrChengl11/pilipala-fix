@@ -408,6 +408,24 @@ release 包抛 `type 'ParentData' is not a subtype of type 'FlexParentData'`，
 
 ---
 
+### 31. 滚动弹幕滚到左边缘后残留半个字符 / 几像素宽的字形
+
+**现象**：弹幕从右向左滚到最左侧后没有干净地离开屏幕，而是在视频左边缘留下半个汉字宽（长弹幕）或几像素宽（短弹幕）的残片；残片会停留几秒才消失，暂停视频时可一直停留。
+
+**根因**（`packages/ns_danmaku`，两个缺陷叠加）：
+
+1. **测量宽度 < 绘制宽度**：`DanmakuView.calculateTextSize()` 用独立 `TextPainter` 测量，其 `TextStyle` 没有 `letterSpacing`；而真正绘制的 `DanmakuBorderText` 里的 `Text` 会继承 `Material` 注入的 `DefaultTextStyle`（M3 `bodyMedium`，`letterSpacing: 0.25`）。`Text` 把它 merge 进自身样式后，实际排版宽度多出 `0.25 × 字符数`：30 字弹幕多 7.5px，正好是半个汉字。滚动动画的 `SlideTransition` 结束位移是 `-1 × 子控件宽度`，即测量盒右缘恰好停在裁剪边界 x=0，多出来的那截字形就露在 `[0, 溢出量]` 内。
+2. **动画完成后不重建**：`onItemComplete()` 只从 `_scrollWidgets` 里删 id，没有 `setState`；`build()` 里的 `Stack.children` 是上一次 build 的快照，已完成的 `ScrollItemView` 继续以 `value=1.0` 的终态绘制。App 侧只有当前 100ms 桶存在弹幕时才调用 `addItems`（进而 `setState`），所以残片要等下一条弹幕到来才消失；暂停/恢复也不会触发重建。
+
+**修复**：
+
+- `danmaku_border_text.dart`：用空 `DefaultTextStyle` 隔离外部继承，`ScrollItemView`/`PositionItemView` 的非描边 `Text` 分支同样处理并去掉测量时未计入的 `letterSpacing: 2`。
+- `danmaku_view.dart`：滚动盒宽度额外预留 `strokeWidth + 2` 像素（`Size(itemWidth, _itemHeight)`），终点时文本右缘停在裁剪区外；`calculateTextSize()` 改用 `MediaQuery.textScalerOf` / `Directionality.of` / `boldTextOf` 与 `Text` 的真实排版保持一致；空文本或 `_viewWidth == 0` 时直接丢弃，避免 `Infinity/NaN`。
+- `danmaku_view.dart`：`onItemComplete()` 删除条目后用 `scheduleMicrotask(() => setState(...))` 触发重建（避开 build 阶段调用 `setState`），完成条目在下一帧即被移除。
+- 新增 `test/danmaku_scroll_sliver_test.dart`：覆盖「绘制宽度 ≤ 滚动盒」「终点完全移出裁剪区」「完成后立即从树上移除」三条回归断言。
+
+---
+
 ### 已知限制
 
 - 未登录时最高只能拿到 480P（`qn=32`），与站点策略一致；这是取流接口的限制，不是下载器的限制。
